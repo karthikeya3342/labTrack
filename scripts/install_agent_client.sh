@@ -95,14 +95,17 @@ mkdir -p /etc/xdg/autostart
 AUTOSTART_FILE="/etc/xdg/autostart/labtrack-kiosk.desktop"
 echo "Configuring Fullscreen Boot Kiosk Greeter at ${AUTOSTART_FILE}..."
 
-# Detect browser binary
-BROWSER_BIN="google-chrome"
-if command -v chromium-browser >/dev/null 2>&1; then
-    BROWSER_BIN="chromium-browser"
+# Detect browser command
+if command -v google-chrome >/dev/null 2>&1; then
+    BROWSER_CMD="google-chrome --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0"
+elif command -v chromium-browser >/dev/null 2>&1; then
+    BROWSER_CMD="chromium-browser --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0"
 elif command -v chromium >/dev/null 2>&1; then
-    BROWSER_BIN="chromium"
-elif command -v google-chrome >/dev/null 2>&1; then
-    BROWSER_BIN="google-chrome"
+    BROWSER_CMD="chromium --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0"
+elif command -v firefox >/dev/null 2>&1; then
+    BROWSER_CMD="firefox --kiosk"
+else
+    BROWSER_CMD="x-www-browser"
 fi
 
 cat << EOF > "${AUTOSTART_FILE}"
@@ -110,10 +113,18 @@ cat << EOF > "${AUTOSTART_FILE}"
 Type=Application
 Name=LabTrack Workstation Kiosk Greeter
 Comment=Fullscreen Physical PC Lock Screen on Boot
-Exec=${BROWSER_BIN} --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0 "${SERVER_URL}/workstation/${CLIENT_HOST}"
+Exec=${BROWSER_CMD} "${SERVER_URL}/workstation/${CLIENT_HOST}"
 Terminal=false
 X-GNOME-Autostart-enabled=true
 EOF
+
+# Also create user autostart for active sudo user if present
+if [ -n "${SUDO_USER}" ] && [ -d "/home/${SUDO_USER}" ]; then
+    USER_AUTOSTART="/home/${SUDO_USER}/.config/autostart"
+    mkdir -p "${USER_AUTOSTART}"
+    cp "${AUTOSTART_FILE}" "${USER_AUTOSTART}/labtrack-kiosk.desktop"
+    chown -R "${SUDO_USER}:${SUDO_USER}" "${USER_AUTOSTART}"
+fi
 
 echo "=========================================================="
 echo "LabTrack Agent daemon and Boot Kiosk Greeter installed!"
