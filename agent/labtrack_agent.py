@@ -67,6 +67,14 @@ class AgentLocalHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/unlock"):
             logger.info("🔓 Received local unlock request. Closing fullscreen kiosk and revealing complete Linux desktop...")
             if AgentLocalHandler.agent_ref:
+                from urllib.parse import urlparse, parse_qs
+                query = parse_qs(urlparse(self.path).query)
+                sess_id_list = query.get("session_id")
+                if sess_id_list and sess_id_list[0].isdigit():
+                    AgentLocalHandler.agent_ref.active_session_id = int(sess_id_list[0])
+                roll_list = query.get("roll")
+                if roll_list:
+                    AgentLocalHandler.agent_ref.active_student_roll = roll_list[0]
                 AgentLocalHandler.agent_ref.last_known_state = "OCCUPIED"
                 AgentLocalHandler.agent_ref.unlock_workstation_gui()
             self.send_response(200)
@@ -79,18 +87,18 @@ class AgentLocalHandler(BaseHTTPRequestHandler):
             logger.info("🔒 Received local lock request. Locking workstation in fullscreen kiosk...")
             if AgentLocalHandler.agent_ref:
                 AgentLocalHandler.agent_ref.last_known_state = "AVAILABLE"
-                if AgentLocalHandler.agent_ref.active_session_id:
-                    try:
-                        requests.post(
-                            f"{AgentLocalHandler.agent_ref.server_url}/api/agent/close",
-                            json={
-                                "session_id": AgentLocalHandler.agent_ref.active_session_id,
-                                "reason": "Student logged out via dock / desktop shortcut"
-                            },
-                            timeout=2.0
-                        )
-                    except Exception:
-                        pass
+                try:
+                    requests.post(
+                        f"{AgentLocalHandler.agent_ref.server_url}/api/agent/close",
+                        json={
+                            "hostname": AgentLocalHandler.agent_ref.hostname,
+                            "session_id": AgentLocalHandler.agent_ref.active_session_id,
+                            "reason": "Student logged out via dock / desktop shortcut"
+                        },
+                        timeout=2.0
+                    )
+                except Exception:
+                    pass
                 AgentLocalHandler.agent_ref.teardown_session()
                 AgentLocalHandler.agent_ref.lock_workstation_gui()
             self.send_response(200)
@@ -577,12 +585,11 @@ Categories=Utility;
 
                 # 1. Transition to OCCUPIED (Student checked in)
                 if server_state == "OCCUPIED" and session_active:
+                    self.active_session_id = data.get("active_session_id")
+                    self.active_student_roll = data.get("active_roll_no") or "Student"
                     if self.last_known_state != "OCCUPIED":
                         student_name = data.get("active_student_name") or "Student"
-                        roll_no = data.get("active_roll_no") or "User"
-                        logger.info(f"Workstation checked in! Student: {student_name} ({roll_no}). Unlocking full Ubuntu desktop...")
-                        self.active_session_id = data.get("active_session_id")
-                        self.active_student_roll = roll_no
+                        logger.info(f"Workstation checked in! Student: {student_name} ({self.active_student_roll}). Unlocking full Ubuntu desktop...")
                         self.last_known_state = "OCCUPIED"
                         self.unlock_workstation_gui()
                 # 2. Transition to AVAILABLE or HELD (Session closed or idle)
@@ -661,19 +668,19 @@ Categories=Utility;
     def poweroff_system(self):
         """Notifies server to end session, wipes workspace, and powers off the PC."""
         logger.info("⏻ Initiating system poweroff sequence...")
-        if self.active_session_id:
-            try:
-                requests.post(
-                    f"{self.server_url}/api/agent/close",
-                    json={
-                        "session_id": self.active_session_id,
-                        "reason": "Workstation shutdown by user"
-                    },
-                    timeout=3.0
-                )
-                logger.info(f"Closed active session {self.active_session_id} on server before poweroff.")
-            except Exception as e:
-                logger.warning(f"Error notifying server of shutdown: {e}")
+        try:
+            requests.post(
+                f"{self.server_url}/api/agent/close",
+                json={
+                    "hostname": self.hostname,
+                    "session_id": self.active_session_id,
+                    "reason": "Workstation shutdown by user"
+                },
+                timeout=2.5
+            )
+            logger.info(f"Notified server of shutdown for {self.hostname}.")
+        except Exception as e:
+            logger.warning(f"Error notifying server of shutdown: {e}")
         self.teardown_session()
         time.sleep(0.5)
         try:
@@ -683,19 +690,19 @@ Categories=Utility;
 
     def _handle_exit(self, signum, frame):
         logger.info(f"Received signal {signum} (system shutdown or daemon stop). Gracefully logging out active session...")
-        if self.active_session_id:
-            try:
-                requests.post(
-                    f"{self.server_url}/api/agent/close",
-                    json={
-                        "session_id": self.active_session_id,
-                        "reason": "Workstation powered off / system shutdown"
-                    },
-                    timeout=3.0
-                )
-                logger.info(f"Successfully closed session {self.active_session_id} on server before shutdown.")
-            except Exception as e:
-                logger.warning(f"Could not reach server during shutdown: {e}")
+        try:
+            requests.post(
+                f"{self.server_url}/api/agent/close",
+                json={
+                    "hostname": self.hostname,
+                    "session_id": self.active_session_id,
+                    "reason": "Workstation powered off / system shutdown"
+                },
+                timeout=2.5
+            )
+            logger.info(f"Successfully notified server of shutdown for {self.hostname}.")
+        except Exception as e:
+            logger.warning(f"Could not reach server during shutdown: {e}")
         self.teardown_session()
         self.running = False
         sys.exit(0)

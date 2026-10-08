@@ -730,7 +730,7 @@
 
                     // Signal local daemon on machine to kill fullscreen kiosk and reveal desktop
                     try {
-                        await fetch('http://127.0.0.1:8008/unlock', { mode: 'cors' });
+                        await fetch(`http://127.0.0.1:8008/unlock?session_id=${data.session_id}&roll=${encodeURIComponent(data.roll_no || '')}`, { mode: 'cors' });
                     } catch (err) {
                         console.log("Local agent unlock call:", err);
                     }

@@ -1,7 +1,8 @@
 [Unit]
 Description=LabTrack Workstation Machine Plane Agent Daemon
-After=network.target network-online.target
+After=network.target network-online.target NetworkManager.service
 Wants=network-online.target
+Before=shutdown.target reboot.target halt.target poweroff.target
 
 [Service]
 Type=simple

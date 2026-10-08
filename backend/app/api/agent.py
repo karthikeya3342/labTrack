@@ -75,17 +75,42 @@ async def workstation_checkin(req: AgentCheckinRequest):
 
 @router.post("/close")
 async def workstation_close(req: AgentCloseRequest):
+    target_session_id = req.session_id
+
+    # If session_id not given but hostname provided, look up active session on this PC
+    if not target_session_id and req.hostname:
+        sess = await fetch_one("""
+            SELECT s.id FROM sessions s
+            JOIN pcs p ON s.pc_id = p.id
+            WHERE p.hostname = $1 AND s.status = 'ACTIVE'
+            ORDER BY s.start_time DESC LIMIT 1
+        """, req.hostname)
+        if sess:
+            target_session_id = sess["id"]
+        else:
+            # If no active session, ensure PC state is reset to AVAILABLE if stuck in OCCUPIED or HELD
+            await execute("UPDATE pcs SET state = 'AVAILABLE' WHERE hostname = $1 AND state IN ('OCCUPIED', 'HELD')", req.hostname)
+            return {"status": "closed", "hostname": req.hostname, "reason": req.reason}
+
+    if not target_session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Must specify either session_id or hostname"
+        )
+
     success = await fetch_val(
         "SELECT fn_close_session($1, $2);",
-        req.session_id,
+        target_session_id,
         req.reason
     )
     if not success:
+        if req.hostname:
+            await execute("UPDATE pcs SET state = 'AVAILABLE' WHERE hostname = $1", req.hostname)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Active session {req.session_id} not found"
+            detail=f"Active session {target_session_id} not found"
         )
-    return {"status": "closed", "session_id": req.session_id, "reason": req.reason}
+    return {"status": "closed", "session_id": target_session_id, "reason": req.reason}
 
 @router.post("/heartbeat")
 async def workstation_heartbeat(req: AgentHeartbeatRequest):

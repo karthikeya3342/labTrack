@@ -77,7 +77,8 @@ class AgentCheckinResponse(BaseModel):
     message: str
 
 class AgentCloseRequest(BaseModel):
-    session_id: int
+    session_id: Optional[int] = None
+    hostname: Optional[str] = None
     reason: str = "Student Logout"
 
 class AgentHeartbeatRequest(BaseModel):

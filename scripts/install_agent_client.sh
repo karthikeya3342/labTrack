@@ -62,8 +62,9 @@ echo "Creating systemd unit at ${SERVICE_FILE}..."
 cat << EOF > "${SERVICE_FILE}"
 [Unit]
 Description=LabTrack Workstation Machine Plane Agent Daemon
-After=network.target network-online.target
+After=network.target network-online.target NetworkManager.service
 Wants=network-online.target
+Before=shutdown.target reboot.target halt.target poweroff.target
 
 [Service]
 Type=simple
@@ -75,6 +76,7 @@ Environment="LABTRACK_HOSTNAME=${CLIENT_HOST}"
 Environment="CAPTIVE_PORTAL_URL=${CAPTIVE_PORTAL}"
 Environment="PYTHONUNBUFFERED=1"
 ExecStart=/usr/bin/python3 ${INSTALL_DIR}/labtrack_agent.py
+ExecStopPost=/usr/bin/curl -s -m 3 -X POST -H "Content-Type: application/json" -d '{"hostname":"${CLIENT_HOST}","reason":"Workstation shutdown / powered off"}' ${SERVER_URL}/api/agent/close
 Restart=always
 RestartSec=3s
 KillMode=mixed
