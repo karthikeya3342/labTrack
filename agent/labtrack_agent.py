@@ -278,12 +278,15 @@ class WorkstationAgent:
             resp = requests.post(url, json=payload, timeout=3.0)
             if resp.ok:
                 data = resp.json()
+                self._heartbeat_counter = getattr(self, "_heartbeat_counter", 0) + 1
+                if self._heartbeat_counter % 3 == 0:  # Log every ~9 seconds
+                    logger.info(f"❤️ [Heartbeat ACK] Synced with Lab Server | State: {data.get('state')} | Session Active: {data.get('session_active')}")
                 # If server says session was closed or force-released, clean up locally
                 if self.active_session_id and not data.get("session_active"):
                     logger.info("Server reported session is no longer active. Executing local teardown...")
                     self.teardown_session()
         except requests.exceptions.RequestException as e:
-            logger.debug(f"Heartbeat server connection note: {e}")
+            logger.warning(f"Heartbeat server connection note: {e}")
 
     def send_telemetry(self):
         """Ingests live /proc telemetry to server."""

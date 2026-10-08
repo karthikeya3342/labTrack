@@ -11,6 +11,7 @@ WorkingDirectory=/home/karthikeya/labTrack
 Environment="LABTRACK_SERVER_URL=http://127.0.0.1:8000"
 Environment="LABTRACK_HOSTNAME=COMP-PC-01"
 Environment="CAPTIVE_PORTAL_URL=https://10.10.10.2:8090/httpclient.html"
+Environment="PYTHONUNBUFFERED=1"
 ExecStart=/usr/bin/python3 /home/karthikeya/labTrack/agent/labtrack_agent.py
 Restart=always
 RestartSec=5s

@@ -73,6 +73,7 @@ WorkingDirectory=${INSTALL_DIR}
 Environment="LABTRACK_SERVER_URL=${SERVER_URL}"
 Environment="LABTRACK_HOSTNAME=${CLIENT_HOST}"
 Environment="CAPTIVE_PORTAL_URL=${CAPTIVE_PORTAL}"
+Environment="PYTHONUNBUFFERED=1"
 ExecStart=/usr/bin/python3 ${INSTALL_DIR}/labtrack_agent.py
 Restart=always
 RestartSec=3s
@@ -89,7 +90,34 @@ systemctl daemon-reload
 systemctl enable labtrack-agent.service
 systemctl restart labtrack-agent.service
 
+# 7. Configure Physical PC Boot Lock Screen Greeter (XDG Desktop Autostart)
+mkdir -p /etc/xdg/autostart
+AUTOSTART_FILE="/etc/xdg/autostart/labtrack-kiosk.desktop"
+echo "Configuring Fullscreen Boot Kiosk Greeter at ${AUTOSTART_FILE}..."
+
+# Detect browser binary
+BROWSER_BIN="google-chrome"
+if command -v chromium-browser >/dev/null 2>&1; then
+    BROWSER_BIN="chromium-browser"
+elif command -v chromium >/dev/null 2>&1; then
+    BROWSER_BIN="chromium"
+elif command -v google-chrome >/dev/null 2>&1; then
+    BROWSER_BIN="google-chrome"
+fi
+
+cat << EOF > "${AUTOSTART_FILE}"
+[Desktop Entry]
+Type=Application
+Name=LabTrack Workstation Kiosk Greeter
+Comment=Fullscreen Physical PC Lock Screen on Boot
+Exec=${BROWSER_BIN} --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0 "${SERVER_URL}/workstation/${CLIENT_HOST}"
+Terminal=false
+X-GNOME-Autostart-enabled=true
+EOF
+
 echo "=========================================================="
-echo "LabTrack Agent daemon installed and active!"
+echo "LabTrack Agent daemon and Boot Kiosk Greeter installed!"
+echo "1. Systemd Service: ACTIVE & ENABLED on boot"
+echo "2. Lock Screen Greeter: AUTO-LAUNCHES on system turn on"
 systemctl status labtrack-agent.service --no-pager
 echo "=========================================================="
