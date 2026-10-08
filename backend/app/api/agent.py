@@ -16,13 +16,13 @@ router = APIRouter(prefix="/agent", tags=["Workstation Agent"])
 async def workstation_checkin(req: AgentCheckinRequest):
     # 1. Verify User Credentials
     user = await fetch_one(
-        "SELECT id, roll_no, name, password_hash, role, is_active FROM users WHERE roll_no = $1",
+        "SELECT id, roll_no, name, password_hash, role, is_active FROM users WHERE roll_no = $1 OR email = $1",
         req.roll_no
     )
     if not user or not user["is_active"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials: student roll number not found"
+            detail="Invalid credentials: student roll number / email not found"
         )
 
     if not verify_password(req.password, user["password_hash"]):

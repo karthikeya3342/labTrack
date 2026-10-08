@@ -97,7 +97,7 @@ DECLARE
 BEGIN
     -- 1. Identify User
     SELECT id, name, role INTO v_user_id, v_user_name, v_user_role
-    FROM users WHERE roll_no = p_roll_no AND is_active = TRUE;
+    FROM users WHERE (roll_no = p_roll_no OR email = p_roll_no) AND is_active = TRUE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Student roll number % not recognized or inactive', p_roll_no;
     END IF;

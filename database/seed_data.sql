@@ -23,7 +23,8 @@ INSERT INTO users (id, roll_no, name, email, password_hash, role) VALUES
 (4, 'STU002', 'Bob Smith', 'bob.smith@labtrack.local', '$2b$12$3eeba334..0/5cx45tfAzORuMaJpXTYITeMPqLgMPqB/lpHUmrzHK', 'student'),
 (5, 'STU003', 'Charlie Brown', 'charlie.brown@labtrack.local', '$2b$12$3eeba334..0/5cx45tfAzORuMaJpXTYITeMPqLgMPqB/lpHUmrzHK', 'student'),
 (6, 'STU004', 'Diana Prince', 'diana.prince@labtrack.local', '$2b$12$3eeba334..0/5cx45tfAzORuMaJpXTYITeMPqLgMPqB/lpHUmrzHK', 'student'),
-(7, 'STU005', 'Ethan Hunt', 'ethan.hunt@labtrack.local', '$2b$12$3eeba334..0/5cx45tfAzORuMaJpXTYITeMPqLgMPqB/lpHUmrzHK', 'student')
+(7, 'STU005', 'Ethan Hunt', 'ethan.hunt@labtrack.local', '$2b$12$3eeba334..0/5cx45tfAzORuMaJpXTYITeMPqLgMPqB/lpHUmrzHK', 'student'),
+(8, '124cs0021', 'Student 124cs0021', '124cs0021@iiitk.ac.in', '$2b$12$NvA2lvjr2PJVJ/kqHZoALe5RPlMNzfLryMwTEdPk3KdCRqVEWL2lG', 'student')
 ON CONFLICT (roll_no) DO NOTHING;
 
 -- Reset sequence for users
@@ -39,7 +40,8 @@ INSERT INTO student_profiles (user_id, department_id, batch_year, cgpa, quota_ho
 (4, 2, 2026, 8.42, 38.5),
 (5, 3, 2027, 9.10, 42.0),
 (6, 1, 2026, 7.95, 35.0),
-(7, 3, 2025, 8.60, 45.0)
+(7, 3, 2025, 8.60, 45.0),
+(8, 1, 2026, 8.50, 40.0)
 ON CONFLICT (user_id) DO NOTHING;
 
 -- 4. Labs

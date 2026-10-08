@@ -8,13 +8,13 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/login", response_model=TokenResponse)
 async def login(req: LoginRequest):
     user = await fetch_one(
-        "SELECT id, roll_no, name, email, password_hash, role, is_active FROM users WHERE roll_no = $1",
+        "SELECT id, roll_no, name, email, password_hash, role, is_active FROM users WHERE roll_no = $1 OR email = $1",
         req.roll_no
     )
     if not user or not user["is_active"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid roll number or inactive account"
+            detail="Invalid roll number / email or inactive account"
         )
 
     if not verify_password(req.password, user["password_hash"]):
