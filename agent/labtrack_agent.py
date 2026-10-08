@@ -21,6 +21,9 @@ import logging
 import urllib3
 import requests
 import psutil
+import subprocess
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional, Dict, Any, List
 
 # Suppress self-signed certificate warnings for captive portal
@@ -46,6 +49,52 @@ BLACKLIST_PROCESS_NAMES = {
     "steam", "lutris", "minecraft"
 }
 
+class AgentLocalHandler(BaseHTTPRequestHandler):
+    agent_ref = None
+
+    def log_message(self, format, *args):
+        pass  # Quiet logging
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.end_headers()
+
+    def do_GET(self):
+        if self.path.startswith("/unlock"):
+            logger.info("🔓 Received local unlock request. Closing fullscreen kiosk and revealing complete Linux desktop...")
+            if AgentLocalHandler.agent_ref:
+                AgentLocalHandler.agent_ref.last_known_state = "OCCUPIED"
+                AgentLocalHandler.agent_ref.unlock_workstation_gui()
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"unlocked"}\n')
+        elif self.path.startswith("/lock"):
+            logger.info("🔒 Received local lock request. Locking workstation in fullscreen kiosk...")
+            if AgentLocalHandler.agent_ref:
+                AgentLocalHandler.agent_ref.last_known_state = "AVAILABLE"
+                AgentLocalHandler.agent_ref.teardown_session()
+                AgentLocalHandler.agent_ref.lock_workstation_gui()
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"locked"}\n')
+        else:
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}\n')
+
 class WorkstationAgent:
     def __init__(self):
         self.hostname = HOSTNAME
@@ -55,8 +104,120 @@ class WorkstationAgent:
         self.active_student_roll: Optional[str] = None
         self.active_cgroup_path: Optional[str] = None
         self.active_workspace_path: Optional[str] = None
+        self.last_known_state: str = "AVAILABLE"
 
+        AgentLocalHandler.agent_ref = self
+        self._start_local_server()
         logger.info(f"Initialized LabTrack Agent on {self.hostname} bound to {self.server_url}")
+
+    def _start_local_server(self):
+        """Starts a local HTTP server on 127.0.0.1:8008 to listen for unlock/lock signals."""
+        def run_server():
+            try:
+                server = HTTPServer(("127.0.0.1", 8008), AgentLocalHandler)
+                logger.info("Local agent control server listening on 127.0.0.1:8008")
+                server.serve_forever()
+            except Exception as e:
+                logger.warning(f"Could not bind local agent control server on 8008: {e}")
+        t = threading.Thread(target=run_server, daemon=True)
+        t.start()
+
+    def get_browser_bin(self) -> str:
+        for b in ["google-chrome", "chromium-browser", "chromium", "firefox"]:
+            if shutil.which(b):
+                return b
+        return "x-www-browser"
+
+    def get_active_gui_user(self) -> str:
+        try:
+            lines = subprocess.check_output(["who"]).decode().splitlines()
+            for l in lines:
+                parts = l.split()
+                if len(parts) >= 2 and any(k in parts[1] for k in ["tty", "seat", ":0"]):
+                    user = parts[0]
+                    if user not in ("root", "lightdm", "gdm"):
+                        return user
+        except Exception:
+            pass
+        users = [d for d in os.listdir("/home") if os.path.isdir(f"/home/{d}")]
+        return users[0] if users else "root"
+
+    def is_kiosk_running(self) -> bool:
+        """Checks if fullscreen kiosk browser is currently running."""
+        try:
+            res = subprocess.run(["pgrep", "-f", ".*--kiosk.*"], stdout=subprocess.DEVNULL)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    def launch_gui_command(self, cmd_args: List[str]):
+        user = self.get_active_gui_user()
+        env = os.environ.copy()
+        env["DISPLAY"] = ":0"
+        try:
+            uid = subprocess.check_output(["id", "-u", user]).decode().strip()
+            env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+            env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{uid}/bus"
+        except Exception:
+            uid = "1000"
+
+        xauth = f"/home/{user}/.Xauthority"
+        xauth_env = f"XAUTHORITY={xauth} " if os.path.exists(xauth) else ""
+
+        try:
+            if os.geteuid() == 0 and user != "root":
+                cmd_str = " ".join(cmd_args)
+                full_cmd = f"DISPLAY=:0 {xauth_env}XDG_RUNTIME_DIR=/run/user/{uid} {cmd_str}"
+                subprocess.Popen(
+                    ["su", "-", user, "-c", full_cmd],
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            else:
+                subprocess.Popen(cmd_args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:
+            logger.warning(f"Error launching GUI command: {e}")
+
+    def unlock_workstation_gui(self):
+        """Kills fullscreen kiosk lock screen and reveals the complete Linux desktop!"""
+        try:
+            subprocess.run(["pkill", "-f", ".*--kiosk.*"], stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        time.sleep(0.3)
+        browser = self.get_browser_bin()
+        floating_url = f"{self.server_url}/workstation/{self.hostname}?floating=1"
+        self.launch_gui_command([
+            browser,
+            f"--app={floating_url}",
+            "--window-size=520,95",
+            "--window-position=1350,15",
+            "--no-first-run",
+            "--no-default-browser-check"
+        ])
+        logger.info("🔓 Complete Ubuntu desktop unlocked for student! Kiosk dismissed.")
+
+    def lock_workstation_gui(self):
+        """Closes floating widget and re-locks workstation in fullscreen kiosk mode."""
+        try:
+            subprocess.run(["pkill", "-f", ".*floating=1.*"], stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        time.sleep(0.3)
+        browser = self.get_browser_bin()
+        kiosk_url = f"{self.server_url}/workstation/{self.hostname}"
+        self.launch_gui_command([
+            browser,
+            "--kiosk",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-translate",
+            "--disable-pinch",
+            "--overscroll-history-navigation=0",
+            kiosk_url
+        ])
+        logger.info("🔒 Workstation locked into un-minimizable fullscreen kiosk mode.")
 
     # =========================================================================
     # 1. CGROUPS v2 ENFORCEMENT
@@ -278,13 +439,36 @@ class WorkstationAgent:
             resp = requests.post(url, json=payload, timeout=3.0)
             if resp.ok:
                 data = resp.json()
+                server_state = data.get("state", "AVAILABLE")
+                session_active = data.get("session_active", False)
+
                 self._heartbeat_counter = getattr(self, "_heartbeat_counter", 0) + 1
                 if self._heartbeat_counter % 3 == 0:  # Log every ~9 seconds
-                    logger.info(f"❤️ [Heartbeat ACK] Synced with Lab Server | State: {data.get('state')} | Session Active: {data.get('session_active')}")
-                # If server says session was closed or force-released, clean up locally
-                if self.active_session_id and not data.get("session_active"):
-                    logger.info("Server reported session is no longer active. Executing local teardown...")
-                    self.teardown_session()
+                    logger.info(f"❤️ [Heartbeat ACK] Synced with Lab Server | State: {server_state} | Session Active: {session_active}")
+
+                # 1. Transition to OCCUPIED (Student checked in)
+                if server_state == "OCCUPIED" and session_active:
+                    if self.last_known_state != "OCCUPIED":
+                        student_name = data.get("active_student_name") or "Student"
+                        roll_no = data.get("active_roll_no") or "User"
+                        logger.info(f"Workstation checked in! Student: {student_name} ({roll_no}). Unlocking full Ubuntu desktop...")
+                        self.active_session_id = data.get("active_session_id")
+                        self.active_student_roll = roll_no
+                        self.last_known_state = "OCCUPIED"
+                        self.unlock_workstation_gui()
+                # 2. Transition to AVAILABLE or HELD (Session closed or idle)
+                elif server_state in ("AVAILABLE", "HELD"):
+                    if self.last_known_state == "OCCUPIED":
+                        logger.info("Server reported session ended. Relocking into fullscreen kiosk...")
+                        self.teardown_session()
+                        self.last_known_state = server_state
+                        self.lock_workstation_gui()
+                    else:
+                        self.last_known_state = server_state
+                        # Self-healing: if unauthenticated but kiosk is not running, restore lock screen
+                        if not self.is_kiosk_running():
+                            logger.info("Fullscreen kiosk not detected while workstation is AVAILABLE/HELD. Relaunching lock screen...")
+                            self.lock_workstation_gui()
         except requests.exceptions.RequestException as e:
             logger.warning(f"Heartbeat server connection note: {e}")
 

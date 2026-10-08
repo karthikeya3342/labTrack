@@ -240,6 +240,86 @@
             cursor: pointer;
         }
 
+        /* Mode: Floating Mini Dock Window (?floating=1) */
+        body.floating-mode {
+            background: #0f172a !important;
+            min-height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 16px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            border-bottom: 2px solid #0284c7;
+        }
+
+        body.floating-mode .top-bar,
+        body.floating-mode .kiosk-container,
+        body.floating-mode footer,
+        body.floating-mode #floatingDock {
+            display: none !important;
+        }
+
+        #floatingBarWidget {
+            display: none;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        body.floating-mode #floatingBarWidget {
+            display: flex !important;
+        }
+
+        .dock-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .dock-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            color: #38bdf8;
+        }
+
+        .dock-user-title {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .dock-user-sub {
+            font-size: 0.76rem;
+            color: #94a3b8;
+        }
+
+        .dock-btn-logout {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .dock-btn-logout:hover {
+            opacity: 0.9;
+        }
+
         /* Occupied Session Box */
         .session-box {
             background: rgba(99, 102, 241, 0.08);
@@ -421,6 +501,18 @@
         <button class="mini-btn-logout" onclick="handleLogout()">🔒 Logout & Relock</button>
     </div>
 
+    <!-- Floating Mini Dock for Desktop Window Mode (?floating=1) -->
+    <div id="floatingBarWidget">
+        <div class="dock-left">
+            <div class="dock-icon">⚡</div>
+            <div>
+                <div class="dock-user-title" id="floatingUserTitle">Active Student Session</div>
+                <div class="dock-user-sub" id="floatingUserSub">Desktop Unlocked &bull; Sandboxed</div>
+            </div>
+        </div>
+        <button class="dock-btn-logout" onclick="handleLogout()">🔒 Logout &amp; Relock</button>
+    </div>
+
     <footer>
         LabTrack Kiosk Engine v1.0.0 &bull; Bound to Local LAN Control Plane &bull; cgroups v2 Sandboxed
     </footer>
@@ -437,6 +529,9 @@
             return urlParams.get('hostname') || 'COMP-PC-01';
         }
 
+        const urlParams = new URLSearchParams(window.location.search);
+        const isFloatingMode = urlParams.get('floating') === '1';
+
         const HOSTNAME = getHostname();
         let currentLockState = null;
         let remainingGraceSeconds = 0;
@@ -444,6 +539,11 @@
         let currentActiveSessionId = null;
 
         document.getElementById('hostBadge').innerText = HOSTNAME;
+
+        if (isFloatingMode) {
+            document.body.classList.add('floating-mode');
+            document.title = `⚡ LabTrack [${HOSTNAME}] - Active Session`;
+        }
 
         window.addEventListener('DOMContentLoaded', () => {
             fetchLockState();
@@ -510,6 +610,11 @@
                     document.getElementById('occSessionId').innerText = `#${data.active_session.session_id}`;
                     document.getElementById('occCpuLoad').innerText = `${data.active_session.cpu_percent || 3.5}%`;
                     document.getElementById('occMemLoad').innerText = `${data.active_session.memory_percent || 14.2}%`;
+
+                    if (isFloatingMode) {
+                        document.getElementById('floatingUserTitle').innerText = `${data.active_session.student_name} (${data.active_session.roll_no})`;
+                        document.getElementById('floatingUserSub').innerText = `${HOSTNAME} • CPU: ${data.active_session.cpu_percent || 2}% • RAM: ${data.active_session.memory_percent || 14}%`;
+                    }
                 }
                 setWanStatus(true);
             } else if (data.state === 'MAINTENANCE') {
@@ -570,8 +675,15 @@
 
                 const data = await res.json();
                 if (res.ok) {
-                    showMessage("Access granted! Unlocking workstation session...", "msg-success");
+                    showMessage("Access granted! Unlocking complete Ubuntu desktop...", "msg-success");
                     currentActiveSessionId = data.session_id;
+
+                    // Signal local daemon on machine to kill fullscreen kiosk and reveal desktop
+                    try {
+                        await fetch('http://127.0.0.1:8008/unlock', { mode: 'cors' });
+                    } catch (err) {
+                        console.log("Local agent unlock call:", err);
+                    }
                     setTimeout(fetchLockState, 500);
                 } else {
                     // Strict Access Enforcement error message
@@ -583,27 +695,36 @@
         }
 
         async function handleLogout() {
-            if (!currentActiveSessionId) return;
-            if (!confirm("Are you sure you want to log out and lock this workstation?")) return;
+            if (!confirm("Are you sure you want to end your session and lock this workstation?")) return;
 
             try {
-                const res = await fetch('/api/agent/close', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: currentActiveSessionId,
-                        reason: "Student voluntarily logged out"
-                    })
-                });
-                if (res.ok) {
-                    currentActiveSessionId = null;
-                    expandFromFloatingBar();
-                    fetchLockState();
-                } else {
-                    alert("Logout failed");
+                if (currentActiveSessionId) {
+                    await fetch('/api/agent/close', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            session_id: currentActiveSessionId,
+                            reason: "Student voluntarily logged out"
+                        })
+                    });
                 }
             } catch (e) {
-                alert("Error connecting to server");
+                console.log("Server close note:", e);
+            }
+
+            // Signal local daemon on machine to restore fullscreen kiosk immediately
+            try {
+                await fetch('http://127.0.0.1:8008/lock', { mode: 'cors' });
+            } catch (e) {
+                console.log("Local agent lock note:", e);
+            }
+
+            currentActiveSessionId = null;
+            if (!isFloatingMode) {
+                expandFromFloatingBar();
+                fetchLockState();
+            } else {
+                window.close();
             }
         }
 

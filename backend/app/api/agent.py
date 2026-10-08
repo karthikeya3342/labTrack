@@ -100,18 +100,34 @@ async def workstation_heartbeat(req: AgentHeartbeatRequest):
     else:
         await execute("UPDATE pcs SET last_heartbeat = $1 WHERE id = $2", now, pc["id"])
 
-    # Check session state
+    # Check session state for this PC
+    sess = await fetch_one("""
+        SELECT s.id, u.roll_no, u.name 
+        FROM sessions s 
+        JOIN users u ON s.student_id = u.id 
+        WHERE s.pc_id = $1 AND s.status = 'ACTIVE' 
+        ORDER BY s.checkin_time DESC LIMIT 1
+    """, pc["id"])
+
     session_active = False
-    if req.current_session_id:
-        sess = await fetch_one("SELECT status FROM sessions WHERE id = $1", req.current_session_id)
-        if sess and sess["status"] == "ACTIVE":
-            session_active = True
+    active_sess_id = None
+    active_roll = None
+    active_name = None
+
+    if sess:
+        session_active = True
+        active_sess_id = sess["id"]
+        active_roll = sess["roll_no"]
+        active_name = sess["name"]
 
     return {
         "status": "ack",
         "hostname": req.hostname,
         "state": pc["state"],
         "session_active": session_active,
+        "active_session_id": active_sess_id,
+        "active_roll_no": active_roll,
+        "active_student_name": active_name,
         "server_time": now.isoformat()
     }
 
