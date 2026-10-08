@@ -104,9 +104,9 @@ async def workstation_heartbeat(req: AgentHeartbeatRequest):
     sess = await fetch_one("""
         SELECT s.id, u.roll_no, u.name 
         FROM sessions s 
-        JOIN users u ON s.student_id = u.id 
+        JOIN users u ON s.user_id = u.id 
         WHERE s.pc_id = $1 AND s.status = 'ACTIVE' 
-        ORDER BY s.checkin_time DESC LIMIT 1
+        ORDER BY s.start_time DESC LIMIT 1
     """, pc["id"])
 
     session_active = False
