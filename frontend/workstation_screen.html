@@ -180,7 +180,64 @@
             font-size: 1rem;
             font-weight: 700;
             cursor: pointer;
-            margin-top: 1.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .btn-desktop {
+            width: 100%;
+            background: #0284c7;
+            color: white;
+            border: none;
+            padding: 0.85rem;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 1.25rem;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn-desktop:hover { opacity: 0.95; }
+
+        /* Floating Mini Dock on Desktop */
+        #floatingDock {
+            position: fixed;
+            top: 14px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid #334155;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+            backdrop-filter: blur(12px);
+            border-radius: 30px;
+            padding: 0.5rem 1.2rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            z-index: 999999;
+            font-size: 0.85rem;
+        }
+        .mini-btn-logout {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .mini-btn-expand {
+            background: #1e293b;
+            color: #38bdf8;
+            border: 1px solid #334155;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
         }
 
         /* Occupied Session Box */
@@ -337,6 +394,10 @@
                     </div>
                 </div>
 
+                <button class="btn-desktop" onclick="minimizeToFloatingBar()">💻 Minimize & Open Linux Desktop</button>
+                <div style="margin: 0.75rem 0; font-size: 0.8rem; color: #94a3b8; line-height: 1.4;">
+                    💡 <em>Shortcut: Press <strong>Super (Windows key)</strong> or <strong>Ctrl+Alt+T</strong> to launch Terminal & Apps anytime.</em>
+                </div>
                 <button class="btn-logout" onclick="handleLogout()">🔒 Logout & Re-lock Workstation</button>
             </div>
 
@@ -347,6 +408,17 @@
 
             <div id="messageBox" class="msg-box"></div>
         </div>
+    </div>
+
+    <!-- Floating Mini Dock on Desktop -->
+    <div id="floatingDock">
+        <span style="display: flex; align-items: center; gap: 0.4rem; color: #34d399; font-weight: 600;">
+            <span class="indicator-dot" style="background:#10b981;"></span>
+            <span id="dockUser">Active Session</span>
+        </span>
+        <span style="color: #94a3b8;" id="dockStats">CPU: 4.2% | RAM: 18%</span>
+        <button class="mini-btn-expand" onclick="expandFromFloatingBar()">🔍 Dashboard</button>
+        <button class="mini-btn-logout" onclick="handleLogout()">🔒 Logout & Relock</button>
     </div>
 
     <footer>
@@ -525,6 +597,7 @@
                 });
                 if (res.ok) {
                     currentActiveSessionId = null;
+                    expandFromFloatingBar();
                     fetchLockState();
                 } else {
                     alert("Logout failed");
@@ -542,6 +615,26 @@
             }
             box.innerText = text;
             box.className = `msg-box ${className}`;
+        }
+
+        function minimizeToFloatingBar() {
+            document.querySelector('.kiosk-container').style.display = 'none';
+            document.querySelector('.top-bar').style.display = 'none';
+            document.querySelector('footer').style.display = 'none';
+            document.body.style.background = 'transparent';
+            document.getElementById('floatingDock').style.display = 'flex';
+            if (currentLockState && currentLockState.active_session) {
+                document.getElementById('dockUser').innerText = currentLockState.active_session.student_name;
+                document.getElementById('dockStats').innerText = `CPU: ${currentLockState.active_session.cpu_percent || 3.5}% | RAM: ${currentLockState.active_session.memory_percent || 14}%`;
+            }
+        }
+
+        function expandFromFloatingBar() {
+            document.querySelector('.kiosk-container').style.display = 'flex';
+            document.querySelector('.top-bar').style.display = 'flex';
+            document.querySelector('footer').style.display = 'block';
+            document.body.style.background = 'radial-gradient(circle at 50% 20%, #172554, var(--bg-color) 70%)';
+            document.getElementById('floatingDock').style.display = 'none';
         }
     </script>
 </body>

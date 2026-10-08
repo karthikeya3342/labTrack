@@ -95,17 +95,17 @@ mkdir -p /etc/xdg/autostart
 AUTOSTART_FILE="/etc/xdg/autostart/labtrack-kiosk.desktop"
 echo "Configuring Fullscreen Boot Kiosk Greeter at ${AUTOSTART_FILE}..."
 
-# Detect browser command
+# Detect browser command (use --app and --start-fullscreen so desktop and apps are accessible upon login)
 if command -v google-chrome >/dev/null 2>&1; then
-    BROWSER_CMD="google-chrome --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0"
+    BROWSER_CMD="google-chrome --app=${SERVER_URL}/workstation/${CLIENT_HOST} --start-fullscreen --no-first-run --no-default-browser-check"
 elif command -v chromium-browser >/dev/null 2>&1; then
-    BROWSER_CMD="chromium-browser --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0"
+    BROWSER_CMD="chromium-browser --app=${SERVER_URL}/workstation/${CLIENT_HOST} --start-fullscreen --no-first-run --no-default-browser-check"
 elif command -v chromium >/dev/null 2>&1; then
-    BROWSER_CMD="chromium --kiosk --no-first-run --no-default-browser-check --disable-translate --disable-pinch --overscroll-history-navigation=0"
+    BROWSER_CMD="chromium --app=${SERVER_URL}/workstation/${CLIENT_HOST} --start-fullscreen --no-first-run --no-default-browser-check"
 elif command -v firefox >/dev/null 2>&1; then
-    BROWSER_CMD="firefox --kiosk"
+    BROWSER_CMD="firefox ${SERVER_URL}/workstation/${CLIENT_HOST}"
 else
-    BROWSER_CMD="x-www-browser"
+    BROWSER_CMD="x-www-browser ${SERVER_URL}/workstation/${CLIENT_HOST}"
 fi
 
 cat << EOF > "${AUTOSTART_FILE}"
@@ -113,7 +113,7 @@ cat << EOF > "${AUTOSTART_FILE}"
 Type=Application
 Name=LabTrack Workstation Kiosk Greeter
 Comment=Fullscreen Physical PC Lock Screen on Boot
-Exec=${BROWSER_CMD} "${SERVER_URL}/workstation/${CLIENT_HOST}"
+Exec=${BROWSER_CMD}
 Terminal=false
 X-GNOME-Autostart-enabled=true
 EOF
