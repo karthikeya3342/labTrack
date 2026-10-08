@@ -63,7 +63,7 @@ async def create_advance_booking(
             req.task_type,
             req.software_required
         )
-    except asyncpg.exceptions.ExclusionConstraintViolationError:
+    except (asyncpg.exceptions.IntegrityConstraintViolationError, asyncpg.exceptions.UniqueViolationError):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Workstation is already booked for an overlapping time window."

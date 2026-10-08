@@ -359,6 +359,47 @@
         .msg-error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; display: block; }
         .msg-success { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; display: block; }
 
+        .btn-power {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            padding: 0.45rem 1rem;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-power:hover {
+            background: #ef4444;
+            color: #ffffff;
+            border-color: #ef4444;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+            transform: translateY(-1px);
+        }
+        .btn-power-discrete {
+            background: transparent;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 0.55rem 1.2rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+        .btn-power-discrete:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border-color: #ef4444;
+        }
+
         /* Footer */
         footer {
             padding: 1rem;
@@ -384,6 +425,9 @@
                 <span class="indicator-dot"></span>
                 <span>Campus Internet Locked (Captive Portal)</span>
             </div>
+            <button class="btn-power" onclick="handlePowerOff()" title="Shut Down Workstation">
+                ⏻ Shut Down PC
+            </button>
         </div>
     </div>
 
@@ -487,6 +531,12 @@
             </div>
 
             <div id="messageBox" class="msg-box"></div>
+
+            <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.25rem;">
+                <button type="button" class="btn-power-discrete" onclick="handlePowerOff()" title="Shut down workstation immediately">
+                    ⏻ Shut Down Workstation
+                </button>
+            </div>
         </div>
     </div>
 
@@ -725,6 +775,18 @@
                 fetchLockState();
             } else {
                 window.close();
+            }
+        }
+
+        async function handlePowerOff() {
+            if (!confirm("Are you sure you want to shut down this computer?")) {
+                return;
+            }
+            showMessage("Shutting down computer...", "msg-error");
+            try {
+                await fetch('http://127.0.0.1:8008/poweroff', { mode: 'cors' });
+            } catch (e) {
+                console.log("Local agent poweroff call:", e);
             }
         }
 

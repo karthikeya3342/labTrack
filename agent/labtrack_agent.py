@@ -99,6 +99,16 @@ class AgentLocalHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(b'{"status":"locked"}\n')
+        elif self.path.startswith("/poweroff") or self.path.startswith("/shutdown"):
+            logger.info("⏻ Received local poweroff request. Shutting down system...")
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"shutting_down"}\n')
+            if AgentLocalHandler.agent_ref:
+                threading.Thread(target=AgentLocalHandler.agent_ref.poweroff_system, daemon=True).start()
         else:
             self.send_response(200)
             self.send_header("Access-Control-Allow-Origin", "*")
@@ -648,9 +658,47 @@ Categories=Utility;
         logger.info("Agent daemon exiting. Cleaning up resources...")
         self.teardown_session()
 
+    def poweroff_system(self):
+        """Notifies server to end session, wipes workspace, and powers off the PC."""
+        logger.info("⏻ Initiating system poweroff sequence...")
+        if self.active_session_id:
+            try:
+                requests.post(
+                    f"{self.server_url}/api/agent/close",
+                    json={
+                        "session_id": self.active_session_id,
+                        "reason": "Workstation shutdown by user"
+                    },
+                    timeout=3.0
+                )
+                logger.info(f"Closed active session {self.active_session_id} on server before poweroff.")
+            except Exception as e:
+                logger.warning(f"Error notifying server of shutdown: {e}")
+        self.teardown_session()
+        time.sleep(0.5)
+        try:
+            subprocess.run(["systemctl", "poweroff"])
+        except Exception:
+            subprocess.run(["shutdown", "-h", "now"])
+
     def _handle_exit(self, signum, frame):
-        logger.info(f"Received signal {signum}, initiating graceful shutdown.")
+        logger.info(f"Received signal {signum} (system shutdown or daemon stop). Gracefully logging out active session...")
+        if self.active_session_id:
+            try:
+                requests.post(
+                    f"{self.server_url}/api/agent/close",
+                    json={
+                        "session_id": self.active_session_id,
+                        "reason": "Workstation powered off / system shutdown"
+                    },
+                    timeout=3.0
+                )
+                logger.info(f"Successfully closed session {self.active_session_id} on server before shutdown.")
+            except Exception as e:
+                logger.warning(f"Could not reach server during shutdown: {e}")
+        self.teardown_session()
         self.running = False
+        sys.exit(0)
 
 if __name__ == "__main__":
     agent = WorkstationAgent()

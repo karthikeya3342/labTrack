@@ -78,7 +78,7 @@ ExecStart=/usr/bin/python3 ${INSTALL_DIR}/labtrack_agent.py
 Restart=always
 RestartSec=3s
 KillMode=mixed
-TimeoutStopSec=5s
+TimeoutStopSec=10s
 
 [Install]
 WantedBy=multi-user.target
