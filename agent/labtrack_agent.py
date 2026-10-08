@@ -79,6 +79,18 @@ class AgentLocalHandler(BaseHTTPRequestHandler):
             logger.info("🔒 Received local lock request. Locking workstation in fullscreen kiosk...")
             if AgentLocalHandler.agent_ref:
                 AgentLocalHandler.agent_ref.last_known_state = "AVAILABLE"
+                if AgentLocalHandler.agent_ref.active_session_id:
+                    try:
+                        requests.post(
+                            f"{AgentLocalHandler.agent_ref.server_url}/api/agent/close",
+                            json={
+                                "session_id": AgentLocalHandler.agent_ref.active_session_id,
+                                "reason": "Student logged out via dock / desktop shortcut"
+                            },
+                            timeout=2.0
+                        )
+                    except Exception:
+                        pass
                 AgentLocalHandler.agent_ref.teardown_session()
                 AgentLocalHandler.agent_ref.lock_workstation_gui()
             self.send_response(200)
@@ -129,18 +141,75 @@ class WorkstationAgent:
         return "x-www-browser"
 
     def get_active_gui_user(self) -> str:
+        """Finds the logged-in desktop user."""
+        try:
+            import pwd
+            if os.path.exists("/run/user"):
+                for uid_dir in os.listdir("/run/user"):
+                    if uid_dir.isdigit() and int(uid_dir) >= 1000:
+                        return pwd.getpwuid(int(uid_dir)).pw_name
+        except Exception:
+            pass
+
         try:
             lines = subprocess.check_output(["who"]).decode().splitlines()
             for l in lines:
                 parts = l.split()
-                if len(parts) >= 2 and any(k in parts[1] for k in ["tty", "seat", ":0"]):
-                    user = parts[0]
-                    if user not in ("root", "lightdm", "gdm"):
-                        return user
+                if len(parts) >= 2 and parts[0] not in ("root", "lightdm", "gdm"):
+                    return parts[0]
         except Exception:
             pass
+
         users = [d for d in os.listdir("/home") if os.path.isdir(f"/home/{d}")]
         return users[0] if users else "root"
+
+    def get_gui_env(self, user: str) -> Dict[str, str]:
+        """Extracts running desktop DISPLAY and WAYLAND environment from /proc."""
+        env = os.environ.copy()
+        try:
+            import pwd
+            pw = pwd.getpwnam(user)
+            uid = str(pw.pw_uid)
+            home = pw.pw_dir
+        except Exception:
+            uid = "1000"
+            home = f"/home/{user}"
+
+        env["USER"] = user
+        env["HOME"] = home
+        env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+        env["DISPLAY"] = ":0"
+
+        if os.path.exists(f"/run/user/{uid}/wayland-0"):
+            env["WAYLAND_DISPLAY"] = "wayland-0"
+
+        if os.path.exists(f"/run/user/{uid}/bus"):
+            env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{uid}/bus"
+
+        for proc in psutil.process_iter(['pid', 'username']):
+            try:
+                if proc.info['username'] == user:
+                    with open(f"/proc/{proc.info['pid']}/environ", "rb") as f:
+                        data = f.read().decode("utf-8", errors="ignore")
+                        proc_env = dict(item.split("=", 1) for item in data.split("\0") if "=" in item)
+                        for k in ["DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "DBUS_SESSION_BUS_ADDRESS"]:
+                            if k in proc_env and proc_env[k]:
+                                env[k] = proc_env[k]
+                        if "DISPLAY" in proc_env or "WAYLAND_DISPLAY" in proc_env:
+                            break
+            except Exception:
+                continue
+
+        if "XAUTHORITY" not in env:
+            for cand in [
+                f"{home}/.Xauthority",
+                f"/run/user/{uid}/gdm/Xauthority",
+                f"/run/user/{uid}/.mutter-Xwaylandauth"
+            ]:
+                if os.path.exists(cand):
+                    env["XAUTHORITY"] = cand
+                    break
+        return env
 
     def is_kiosk_running(self) -> bool:
         """Checks if fullscreen kiosk browser is currently running."""
@@ -152,32 +221,62 @@ class WorkstationAgent:
 
     def launch_gui_command(self, cmd_args: List[str]):
         user = self.get_active_gui_user()
-        env = os.environ.copy()
-        env["DISPLAY"] = ":0"
-        try:
-            uid = subprocess.check_output(["id", "-u", user]).decode().strip()
-            env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
-            env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{uid}/bus"
-        except Exception:
-            uid = "1000"
-
-        xauth = f"/home/{user}/.Xauthority"
-        xauth_env = f"XAUTHORITY={xauth} " if os.path.exists(xauth) else ""
+        env = self.get_gui_env(user)
+        logger.info(f"Launching GUI command for user '{user}': {' '.join(cmd_args[:4])}")
 
         try:
             if os.geteuid() == 0 and user != "root":
-                cmd_str = " ".join(cmd_args)
-                full_cmd = f"DISPLAY=:0 {xauth_env}XDG_RUNTIME_DIR=/run/user/{uid} {cmd_str}"
-                subprocess.Popen(
-                    ["su", "-", user, "-c", full_cmd],
+                import pwd
+                pw = pwd.getpwnam(user)
+                try:
+                    subprocess.run(["xhost", "+local:"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+
+                p = subprocess.Popen(
+                    cmd_args,
+                    user=pw.pw_uid,
+                    group=pw.pw_gid,
                     env=env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
+                logger.info(f"Launched GUI process PID {p.pid} as user {user}")
             else:
-                subprocess.Popen(cmd_args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                p = subprocess.Popen(cmd_args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                logger.info(f"Launched GUI process PID {p.pid}")
         except Exception as e:
-            logger.warning(f"Error launching GUI command: {e}")
+            logger.error(f"Error launching GUI command: {e}")
+
+    def create_desktop_logout_icon(self):
+        """Creates an un-missable Desktop and application shortcut to logout anytime."""
+        user = self.get_active_gui_user()
+        desktop_dir = f"/home/{user}/Desktop"
+        shortcut_content = """[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🔒 Logout & Relock Workstation
+Comment=End LabTrack session and relock machine
+Exec=curl -s http://127.0.0.1:8008/lock
+Icon=system-lock-screen
+Terminal=false
+Categories=Utility;
+"""
+        try:
+            if os.path.exists(desktop_dir):
+                shortcut_path = os.path.join(desktop_dir, "labtrack-logout.desktop")
+                with open(shortcut_path, "w") as f:
+                    f.write(shortcut_content)
+                os.chmod(shortcut_path, 0o755)
+                import pwd
+                pw = pwd.getpwnam(user)
+                os.chown(shortcut_path, pw.pw_uid, pw.pw_gid)
+                try:
+                    subprocess.run(["gio", "set", shortcut_path, "metadata::trusted", "true"], user=pw.pw_uid, env=self.get_gui_env(user), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Note creating desktop shortcut: {e}")
 
     def unlock_workstation_gui(self):
         """Kills fullscreen kiosk lock screen and reveals the complete Linux desktop!"""
@@ -185,16 +284,35 @@ class WorkstationAgent:
             subprocess.run(["pkill", "-f", ".*--kiosk.*"], stderr=subprocess.DEVNULL)
         except Exception:
             pass
-        time.sleep(0.3)
+        time.sleep(0.5)
+
+        # Clear stale dock profile lock so Chrome opens instantly without conflicts
+        dock_dir = "/tmp/labtrack_dock_profile"
+        try:
+            shutil.rmtree(dock_dir, ignore_errors=True)
+            os.makedirs(dock_dir, mode=0o777, exist_ok=True)
+            user = self.get_active_gui_user()
+            import pwd
+            pw = pwd.getpwnam(user)
+            os.chown(dock_dir, pw.pw_uid, pw.pw_gid)
+        except Exception:
+            pass
+
+        # Create desktop logout icon for convenience on student's desktop
+        self.create_desktop_logout_icon()
+
         browser = self.get_browser_bin()
         floating_url = f"{self.server_url}/workstation/{self.hostname}?floating=1"
         self.launch_gui_command([
             browser,
+            f"--user-data-dir={dock_dir}",
             f"--app={floating_url}",
-            "--window-size=520,95",
-            "--window-position=1350,15",
+            "--window-size=540,130",
+            "--window-position=500,30",
             "--no-first-run",
-            "--no-default-browser-check"
+            "--no-default-browser-check",
+            "--disable-session-crashed-bubble",
+            "--disable-infobars"
         ])
         logger.info("🔓 Complete Ubuntu desktop unlocked for student! Kiosk dismissed.")
 
@@ -202,9 +320,10 @@ class WorkstationAgent:
         """Closes floating widget and re-locks workstation in fullscreen kiosk mode."""
         try:
             subprocess.run(["pkill", "-f", ".*floating=1.*"], stderr=subprocess.DEVNULL)
+            subprocess.run(["pkill", "-f", ".*labtrack_dock.*"], stderr=subprocess.DEVNULL)
         except Exception:
             pass
-        time.sleep(0.3)
+        time.sleep(0.5)
         browser = self.get_browser_bin()
         kiosk_url = f"{self.server_url}/workstation/{self.hostname}"
         self.launch_gui_command([

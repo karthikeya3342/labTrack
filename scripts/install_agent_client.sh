@@ -126,9 +126,37 @@ if [ -n "${SUDO_USER}" ] && [ -d "/home/${SUDO_USER}" ]; then
     chown -R "${SUDO_USER}:${SUDO_USER}" "${USER_AUTOSTART}"
 fi
 
+# 8. Install System-wide labtrack-logout CLI command
+cat << 'EOF' > /usr/local/bin/labtrack-logout
+#!/usr/bin/env bash
+echo "🔒 Requesting LabTrack session close and relock..."
+curl -s http://127.0.0.1:8008/lock
+EOF
+chmod +x /usr/local/bin/labtrack-logout
+
+# 9. Create Desktop shortcut for active desktop user
+DESKTOP_DIR="/home/${SUDO_USER:-cse-sdpl}/Desktop"
+if [ -d "${DESKTOP_DIR}" ]; then
+    cat << 'EOF' > "${DESKTOP_DIR}/labtrack-logout.desktop"
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=🔒 Logout & Relock Workstation
+Comment=End LabTrack session and lock workstation
+Exec=curl -s http://127.0.0.1:8008/lock
+Icon=system-lock-screen
+Terminal=false
+Categories=Utility;
+EOF
+    chmod +x "${DESKTOP_DIR}/labtrack-logout.desktop"
+    chown "${SUDO_USER:-cse-sdpl}:${SUDO_USER:-cse-sdpl}" "${DESKTOP_DIR}/labtrack-logout.desktop" 2>/dev/null || true
+fi
+
 echo "=========================================================="
 echo "LabTrack Agent daemon and Boot Kiosk Greeter installed!"
 echo "1. Systemd Service: ACTIVE & ENABLED on boot"
 echo "2. Lock Screen Greeter: AUTO-LAUNCHES on system turn on"
+echo "3. Desktop Shortcut: '🔒 Logout & Relock Workstation' installed"
+echo "4. Terminal Command: Type 'labtrack-logout' to relock anytime"
 systemctl status labtrack-agent.service --no-pager
 echo "=========================================================="
