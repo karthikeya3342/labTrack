@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+export LD_LIBRARY_PATH=/home/karthikeya/labTrack/.postgres_dist/usr/lib/x86_64-linux-gnu:/home/karthikeya/labTrack/.postgres_dist/usr/lib/postgresql/16/lib:${LD_LIBRARY_PATH}
+exec /home/karthikeya/labTrack/.postgres_dist/usr/lib/postgresql/16/bin/createdb "$@"

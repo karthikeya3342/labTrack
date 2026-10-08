@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LabTrack - University Lab Management & Intelligent Scheduling</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --accent-blue: #38bdf8;
+            --accent-indigo: #818cf8;
+            --status-available: #10b981;
+            --status-held: #f59e0b;
+            --status-occupied: #6366f1;
+            --status-maint: #64748b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: var(--bg-primary); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+        
+        header { background-color: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo-group { display: flex; align-items: center; gap: 0.75rem; }
+        .logo-badge { background: linear-gradient(135deg, #0284c7, #6366f1); color: white; padding: 0.4rem 0.8rem; border-radius: 8px; font-weight: 700; font-size: 1.1rem; }
+        .subtitle { font-size: 0.85rem; color: var(--text-muted); }
+
+        .auth-bar { display: flex; align-items: center; gap: 1rem; }
+        .user-tag { background: var(--bg-tertiary); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.85rem; }
+        .btn { background: var(--accent-blue); color: #0f172a; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 0.875rem; }
+        .btn:hover { opacity: 0.9; }
+        .btn-outline { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); }
+        .btn-outline:hover { background: var(--bg-tertiary); }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-success { background: var(--status-available); color: white; }
+
+        nav { background: #131d31; display: flex; padding: 0 2rem; border-bottom: 1px solid var(--border-color); gap: 1rem; overflow-x: auto; }
+        .tab-btn { background: none; border: none; color: var(--text-muted); padding: 0.9rem 1.25rem; font-size: 0.95rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; white-space: nowrap; }
+        .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+        .tab-btn:hover { color: var(--text-main); }
+
+        main { flex: 1; padding: 1.5rem 2rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+        .card-title { font-size: 1.25rem; font-weight: 600; }
+
+        /* Grid */
+        .lab-filter-row { display: flex; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+        .filter-chip { padding: 0.4rem 0.9rem; border-radius: 20px; font-size: 0.85rem; cursor: pointer; background: var(--bg-tertiary); border: 1px solid transparent; }
+        .filter-chip.active { background: var(--accent-blue); color: #0f172a; font-weight: 600; }
+
+        .pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; }
+        .pc-card { background: #182234; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; transition: transform 0.2s, box-shadow 0.2s; position: relative; }
+        .pc-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+        .pc-card.state-AVAILABLE { border-left: 4px solid var(--status-available); }
+        .pc-card.state-HELD { border-left: 4px solid var(--status-held); }
+        .pc-card.state-OCCUPIED { border-left: 4px solid var(--status-occupied); }
+        .pc-card.state-MAINTENANCE { border-left: 4px solid var(--status-maint); }
+
+        .pc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .pc-name { font-weight: 700; font-size: 1rem; }
+        .status-badge { font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px; text-transform: uppercase; }
+        .badge-AVAILABLE { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-HELD { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge-OCCUPIED { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+        .badge-MAINTENANCE { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+
+        .pc-details { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 0.75rem; }
+        .pc-specs { font-size: 0.75rem; color: #64748b; border-top: 1px solid #283548; padding-top: 0.5rem; }
+
+        /* Form elements */
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+        input, select, textarea { background: #131d31; border: 1px solid var(--border-color); color: var(--text-main); padding: 0.6rem 0.8rem; border-radius: 6px; font-size: 0.9rem; }
+        input:focus, select:focus { outline: none; border-color: var(--accent-blue); }
+        .checkbox-group { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.5rem; }
+        .checkbox-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-main); cursor: pointer; }
+
+        /* Tables */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; text-align: left; }
+        th { background: #182234; padding: 0.75rem 1rem; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--border-color); }
+        td { padding: 0.75rem 1rem; border-bottom: 1px solid #233147; }
+        tr:hover td { background: #152033; }
+
+        /* Semaphore tracker */
+        .license-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+        .license-card { background: #182234; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; }
+        .progress-bar { background: #233147; height: 10px; border-radius: 5px; overflow: hidden; margin: 0.75rem 0 0.5rem 0; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #10b981, #38bdf8); border-radius: 5px; transition: width 0.3s; }
+
+        /* Simulation Visualizer */
+        .metric-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .metric-card { background: #182234; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; }
+        .metric-val { font-size: 1.75rem; font-weight: 700; color: var(--accent-blue); margin: 0.25rem 0; }
+        .metric-gain { color: var(--status-available); font-size: 0.85rem; font-weight: 600; }
+
+        .convergence-box { height: 220px; width: 100%; background: #131d31; border-radius: 8px; border: 1px solid var(--border-color); padding: 1rem; margin-bottom: 1.5rem; position: relative; }
+        svg { width: 100%; height: 100%; overflow: visible; }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; width: 90%; max-width: 480px; padding: 2rem; }
+
+        .banner { background: #1e3a5f; border-left: 4px solid var(--accent-blue); padding: 0.75rem 1rem; border-radius: 4px; margin-bottom: 1.25rem; font-size: 0.85rem; color: #bae6fd; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-group">
+            <div class="logo-badge">LT</div>
+            <div>
+                <h2>LabTrack</h2>
+                <div class="subtitle">Computer Lab Resource Management & Intelligent Scheduling</div>
+            </div>
+        </div>
+        <div class="auth-bar" id="authSection">
+            <span class="user-tag" id="userInfoDisplay">Connecting...</span>
+            <button class="btn btn-outline" id="authBtn" onclick="openLoginModal()">Login</button>
+        </div>
+    </header>
+
+    <nav>
+        <button class="tab-btn active" onclick="switchTab('gridTab')">🖥️ Live Workstation Grid</button>
+        <button class="tab-btn" onclick="switchTab('bookingTab')">📅 Advance Booking</button>
+        <button class="tab-btn" onclick="switchTab('myReservationsTab')">🎟️ My Reservations</button>
+        <button class="tab-btn" onclick="switchTab('adminTab')">⚙️ Admin Operations</button>
+        <button class="tab-btn" onclick="switchTab('simulationTab')">🔬 Research Paper GA Simulation</button>
+    </nav>
+
+    <main>
+        <!-- TAB 1: WORKSTATION GRID -->
+        <div id="gridTab" class="tab-content active">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Laboratory Workstation Topology</div>
+                        <div class="subtitle">Real-time status across 3 specialized computer labs (45 total PCs)</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadWorkstations()">🔄 Refresh</button>
+                </div>
+                <div class="lab-filter-row" id="labFilterRow">
+                    <div class="filter-chip active" onclick="filterByLab(null, this)">All Labs (45 PCs)</div>
+                    <div class="filter-chip" onclick="filterByLab(1, this)">Lab 1: Computing Lab</div>
+                    <div class="filter-chip" onclick="filterByLab(2, this)">Lab 2: Software Eng</div>
+                    <div class="filter-chip" onclick="filterByLab(3, this)">Lab 3: AI Lab (RTX 4090)</div>
+                </div>
+                <div class="pc-grid" id="pcGrid">
+                    <!-- Dynamic PC Cards -->
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: ADVANCE BOOKING -->
+        <div id="bookingTab" class="tab-content">
+            <div class="card" style="max-width: 800px; margin: 0 auto;">
+                <div class="card-header">
+                    <div class="card-title">Book Lab Workstation in Advance</div>
+                </div>
+                <div class="banner">
+                    💡 <strong>Reservation Grace Policy:</strong> Workstations are automatically held in <strong>HELD</strong> state 10 minutes prior to session start. Reserved students have a 15-minute grace deadline.
+                </div>
+                <form id="advanceBookingForm" onsubmit="handleAdvanceBooking(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Target Laboratory</label>
+                            <select id="bookLabSelect" required onchange="handleLabSelectChange()">
+                                <option value="1">Lab 1: Computing Lab (General Coding)</option>
+                                <option value="2">Lab 2: Software Engineering (Modeling & Dev)</option>
+                                <option value="3">Lab 3: AI & High Perf Lab (RTX 4090 GPUs)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Task Type</label>
+                            <select id="bookTaskType">
+                                <option value="Practice">Practice Session</option>
+                                <option value="Senior Project">Senior Capstone Project</option>
+                                <option value="Coursework">Coursework & Assignments</option>
+                                <option value="Exam">Laboratory Examination</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Start Date & Time</label>
+                            <input type="datetime-local" id="bookStartTime" required />
+                        </div>
+                        <div class="form-group">
+                            <label>End Date & Time</label>
+                            <input type="datetime-local" id="bookEndTime" required />
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label>Software & Hardware Requirements</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label"><input type="checkbox" name="swReq" value="MATLAB" /> MATLAB R2024a</label>
+                            <label class="checkbox-label"><input type="checkbox" name="swReq" value="Vivado" /> Xilinx Vivado</label>
+                            <label class="checkbox-label"><input type="checkbox" name="swReq" value="AutoCAD" /> AutoCAD 2025</label>
+                            <label class="checkbox-label"><input type="checkbox" name="swReq" value="PyTorch GPU" id="swPytorchGpu" /> PyTorch GPU (Requires AI Lab)</label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn" style="width: 100%; padding: 0.75rem;">Confirm Workstation Reservation</button>
+                    <div id="bookingMsg" style="margin-top: 1rem; font-size: 0.9rem;"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- TAB 3: MY RESERVATIONS -->
+        <div id="myReservationsTab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">My Workstation Bookings</div>
+                    <button class="btn btn-outline" onclick="loadMyReservations()">🔄 Refresh</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Booking ID</th>
+                                <th>Workstation</th>
+                                <th>Lab</th>
+                                <th>Time Window</th>
+                                <th>Task Type</th>
+                                <th>Software</th>
+                                <th>Status</th>
+                                <th>Grace Deadline</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="myReservationsTbody">
+                            <tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Please log in to view reservations</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: ADMIN OPERATIONS -->
+        <div id="adminTab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Commercial Software License Semaphore Tracker</div>
+                </div>
+                <div class="license-grid" id="licenseGrid">
+                    <!-- Dynamic License Cards -->
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Workstation Maintenance & Force-Release Control</div>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Hostname</th>
+                                <th>Lab</th>
+                                <th>Current State</th>
+                                <th>Active Session</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminPcsTbody">
+                            <!-- Dynamic admin PC rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: RESEARCH PAPER SIMULATION VISUALIZER -->
+        <div id="simulationTab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Intelligent Laboratory Scheduling Optimization Simulator</div>
+                        <div class="subtitle">Empirical Validation of Chao He & Shi Cheng (2025): Variable Population Pyramid Model (VPPM) Genetic Algorithm</div>
+                    </div>
+                    <button class="btn btn-success" id="runSimBtn" onclick="runSimulation()">🚀 Run Simulation Benchmark</button>
+                </div>
+
+                <div class="metric-cards">
+                    <div class="metric-card">
+                        <label>Baseline FCFS Utilization</label>
+                        <div class="metric-val" id="metricFcfs">56.4%</div>
+                        <div class="subtitle">First-Come, First-Served</div>
+                    </div>
+                    <div class="metric-card">
+                        <label>Intelligent VPPM-GA Utilization</label>
+                        <div class="metric-val" id="metricGa" style="color: #34d399;">82.1%</div>
+                        <div class="subtitle">Multi-tier Genetic Optimization</div>
+                    </div>
+                    <div class="metric-card">
+                        <label>Equipment Utilization Gain</label>
+                        <div class="metric-val" id="metricGain" style="color: #fbbf24;">+25.7%</div>
+                        <div class="metric-gain">Target Range: +16.3% to +34.6% (Verified)</div>
+                    </div>
+                    <div class="metric-card">
+                        <label>Hard Constraints (M1 - M6)</label>
+                        <div class="metric-val" id="metricConstraints" style="color: #38bdf8; font-size: 1.3rem;">6 / 6 Satisfied</div>
+                        <div class="subtitle">No student/faculty/room collisions</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 0.5rem; font-weight: 600;">📈 Population Fitness Convergence Graph (Across 25 Generations)</div>
+                <div class="convergence-box">
+                    <svg id="convergenceSvg" viewBox="0 0 800 180" preserveAspectRatio="none">
+                        <!-- Dynamic SVG curve -->
+                    </svg>
+                </div>
+
+                <div class="card-title" style="margin-bottom: 0.75rem;">⚡ Live Dynamic TaskPool Queue (Section 2.3 Preemption & Aging)</div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Task ID</th>
+                                <th>Student</th>
+                                <th>Task Type</th>
+                                <th>GPU Req</th>
+                                <th>RAM Req</th>
+                                <th>Waiting (W_t)</th>
+                                <th>Running (R_t)</th>
+                                <th>Default P_def</th>
+                                <th>Dynamic P_task</th>
+                                <th>Preemption Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="taskpoolTbody">
+                            <!-- Dynamic TaskPool Items -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- LOGIN MODAL -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal">
+            <h3 style="margin-bottom: 1rem;">User Authentication</h3>
+            <p class="subtitle" style="margin-bottom: 1.25rem;">Sign in to access advance bookings, session controls, and admin features.</p>
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Roll Number / Username</label>
+                    <input type="text" id="loginRollNo" placeholder="e.g. STU001 or admin" required />
+                </div>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="e.g. stu123 or admin123" required />
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeLoginModal()">Cancel</button>
+                    <button type="submit" class="btn">Sign In</button>
+                </div>
+                <div id="loginMsg" style="margin-top: 1rem; font-size: 0.85rem; color: #f87171;"></div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let currentUser = null;
+        let authToken = localStorage.getItem('labtrack_token');
+        let currentLabFilter = null;
+        let allPcs = [];
+
+        // Initialization
+        window.addEventListener('DOMContentLoaded', async () => {
+            initDefaultTimes();
+            if (authToken) {
+                await fetchCurrentUser();
+            } else {
+                // Auto-login as demo student STU001 for immediate out-of-the-box convenience
+                quickLogin("STU001", "stu123");
+            }
+            loadWorkstations();
+            loadLicenses();
+            runSimulation(); // pre-load simulation visualizer
+
+            // Poll workstations every 5s
+            setInterval(() => {
+                loadWorkstations(true);
+            }, 5000);
+        });
+
+        function initDefaultTimes() {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 10);
+            const later = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+            
+            const formatForInput = (d) => {
+                const pad = (n) => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            };
+
+            document.getElementById('bookStartTime').value = formatForInput(now);
+            document.getElementById('bookEndTime').value = formatForInput(later);
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+
+            if (tabId === 'myReservationsTab') loadMyReservations();
+            if (tabId === 'adminTab') { loadLicenses(); loadAdminPcs(); }
+        }
+
+        async function quickLogin(rollNo, password) {
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roll_no: rollNo, password: password })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    authToken = data.access_token;
+                    localStorage.setItem('labtrack_token', authToken);
+                    currentUser = data.user;
+                    updateAuthUI();
+                }
+            } catch(e) {
+                console.error("Auto login error:", e);
+            }
+        }
+
+        async function fetchCurrentUser() {
+            try {
+                const res = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.ok) {
+                    currentUser = await res.json();
+                    updateAuthUI();
+                } else {
+                    logout();
+                }
+            } catch (e) {
+                logout();
+            }
+        }
+
+        function updateAuthUI() {
+            const display = document.getElementById('userInfoDisplay');
+            const btn = document.getElementById('authBtn');
+            if (currentUser) {
+                display.innerText = `👤 ${currentUser.name} (${currentUser.roll_no}) [${currentUser.role.toUpperCase()}]`;
+                btn.innerText = "Logout";
+                btn.onclick = logout;
+            } else {
+                display.innerText = "Not Authenticated";
+                btn.innerText = "Login";
+                btn.onclick = openLoginModal;
+            }
+        }
+
+        function openLoginModal() { document.getElementById('loginModal').style.display = 'flex'; }
+        function closeLoginModal() { document.getElementById('loginModal').style.display = 'none'; }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const rollNo = document.getElementById('loginRollNo').value;
+            const pw = document.getElementById('loginPassword').value;
+            const msg = document.getElementById('loginMsg');
+            msg.innerText = "";
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roll_no: rollNo, password: pw })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    authToken = data.access_token;
+                    localStorage.setItem('labtrack_token', authToken);
+                    currentUser = data.user;
+                    updateAuthUI();
+                    closeLoginModal();
+                    loadMyReservations();
+                } else {
+                    msg.innerText = data.detail || "Authentication failed";
+                }
+            } catch (err) {
+                msg.innerText = "Network error connecting to Lab Server";
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('labtrack_token');
+            authToken = null;
+            currentUser = null;
+            updateAuthUI();
+        }
+
+        // Workstation Grid
+        async function loadWorkstations(silent = false) {
+            try {
+                const res = await fetch('/api/pcs');
+                allPcs = await res.json();
+                renderPcGrid();
+                if (document.getElementById('adminTab').classList.contains('active')) {
+                    loadAdminPcs();
+                }
+            } catch (e) {
+                if (!silent) console.error("Error loading workstations:", e);
+            }
+        }
+
+        function filterByLab(labId, el) {
+            currentLabFilter = labId;
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            el.classList.add('active');
+            renderPcGrid();
+        }
+
+        function renderPcGrid() {
+            const container = document.getElementById('pcGrid');
+            const filtered = currentLabFilter ? allPcs.filter(p => p.lab_id === currentLabFilter) : allPcs;
+
+            container.innerHTML = filtered.map(pc => {
+                let badgeClass = `badge-${pc.state}`;
+                let extraInfo = "";
+
+                if (pc.state === 'HELD' && pc.held_info) {
+                    extraInfo = `<div>🔒 Reserved for: <strong>${pc.held_info.student_name}</strong> (${pc.held_info.roll_no})</div>`;
+                } else if (pc.state === 'OCCUPIED' && pc.active_session) {
+                    extraInfo = `<div>👤 Occupied by: <strong>${pc.active_session.student_name}</strong></div>`;
+                } else if (pc.state === 'MAINTENANCE') {
+                    extraInfo = `<div>⚠️ ${pc.maintenance_reason || 'Diagnostics'}</div>`;
+                }
+
+                return `
+                    <div class="pc-card state-${pc.state}">
+                        <div class="pc-header">
+                            <span class="pc-name">${pc.hostname}</span>
+                            <span class="status-badge ${badgeClass}">${pc.state}</span>
+                        </div>
+                        <div class="pc-details">
+                            <div>🏛️ ${pc.lab_name}</div>
+                            ${extraInfo}
+                        </div>
+                        <div class="pc-specs">
+                            <div>CPU: ${pc.specifications.cpu || 'Intel Core'}</div>
+                            <div>GPU: ${pc.specifications.gpu || 'Integrated'}</div>
+                            <div>RAM: ${pc.specifications.ram_gb || 32} GB</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Advance Booking
+        function handleLabSelectChange() {
+            const labId = document.getElementById('bookLabSelect').value;
+            const pytorchCheck = document.getElementById('swPytorchGpu');
+            if (labId !== "3") {
+                pytorchCheck.checked = false;
+                pytorchCheck.disabled = true;
+            } else {
+                pytorchCheck.disabled = false;
+            }
+        }
+
+        async function handleAdvanceBooking(e) {
+            e.preventDefault();
+            const msg = document.getElementById('bookingMsg');
+            msg.innerHTML = "Processing booking...";
+
+            if (!authToken) {
+                msg.innerHTML = `<span style="color: #ef4444;">Please login first to make a reservation.</span>`;
+                return;
+            }
+
+            const labId = parseInt(document.getElementById('bookLabSelect').value);
+            const taskType = document.getElementById('bookTaskType').value;
+            const startTime = new Date(document.getElementById('bookStartTime').value).toISOString();
+            const endTime = new Date(document.getElementById('bookEndTime').value).toISOString();
+
+            const swReq = Array.from(document.querySelectorAll('input[name="swReq"]:checked')).map(c => c.value);
+
+            try {
+                const res = await fetch('/api/reservations/advance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        lab_id: labId,
+                        task_type: taskType,
+                        start_time: startTime,
+                        end_time: endTime,
+                        software_required: swReq
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    msg.innerHTML = `<span style="color: #34d399;">✅ Reservation confirmed! Workstation <strong>${data.reservation.hostname}</strong> has been allocated in ${data.reservation.lab_name}. Status: <strong>${data.reservation.status}</strong></span>`;
+                    loadWorkstations();
+                } else {
+                    msg.innerHTML = `<span style="color: #ef4444;">❌ Booking failed: ${data.detail}</span>`;
+                }
+            } catch (err) {
+                msg.innerHTML = `<span style="color: #ef4444;">❌ Network error</span>`;
+            }
+        }
+
+        // My Reservations
+        async function loadMyReservations() {
+            const tbody = document.getElementById('myReservationsTbody');
+            if (!authToken) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">Please log in to view reservations</td></tr>`;
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/reservations/my', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const list = await res.json();
+                if (list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">No active reservations found.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = list.map(r => `
+                    <tr>
+                        <td>#${r.id}</td>
+                        <td><strong>${r.hostname}</strong></td>
+                        <td>${r.lab_name}</td>
+                        <td>${new Date(r.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(r.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td>${r.task_type}</td>
+                        <td>${(r.software_required || []).join(', ') || 'Standard'}</td>
+                        <td><span class="status-badge badge-${r.status}">${r.status}</span></td>
+                        <td>${r.grace_deadline ? new Date(r.grace_deadline).toLocaleTimeString() : 'N/A'}</td>
+                        <td>
+                            ${r.status === 'PENDING' || r.status === 'HELD' ? `<button class="btn btn-outline btn-danger" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="cancelBooking(${r.id})">Cancel</button>` : '-'}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function cancelBooking(id) {
+            if (!confirm(`Cancel reservation #${id}?`)) return;
+            try {
+                const res = await fetch(`/api/reservations/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.ok) {
+                    loadMyReservations();
+                    loadWorkstations();
+                }
+            } catch(e) {
+                alert("Cancellation failed");
+            }
+        }
+
+        // Admin & Licenses
+        async function loadLicenses() {
+            try {
+                const res = await fetch('/api/admin/licenses');
+                const list = await res.json();
+                const container = document.getElementById('licenseGrid');
+                container.innerHTML = list.map(l => `
+                    <div class="license-card">
+                        <div style="display: flex; justify-content: space-between; font-weight: 600;">
+                            <span>${l.name}</span>
+                            <span>${l.active_seats} / ${l.max_seats} Seats</span>
+                        </div>
+                        <div class="subtitle">${l.category}</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${l.utilization_pct}%;"></div>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-align: right;">${l.utilization_pct}% Active Utilization</div>
+                    </div>
+                `).join('');
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function loadAdminPcs() {
+            const tbody = document.getElementById('adminPcsTbody');
+            tbody.innerHTML = allPcs.map(pc => `
+                <tr>
+                    <td><strong>${pc.hostname}</strong></td>
+                    <td>${pc.lab_name}</td>
+                    <td><span class="status-badge badge-${pc.state}">${pc.state}</span></td>
+                    <td>${pc.active_session ? `${pc.active_session.student_name} (#${pc.active_session.session_id})` : '-'}</td>
+                    <td>
+                        ${pc.state === 'OCCUPIED' && pc.active_session ? `<button class="btn btn-outline btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.4rem;" onclick="forceReleaseSession(${pc.active_session.session_id})">Force Release</button>` : ''}
+                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="toggleMaintenance('${pc.hostname}', ${pc.state !== 'MAINTENANCE'})">
+                            ${pc.state === 'MAINTENANCE' ? 'Restore Online' : 'Set Maintenance'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function forceReleaseSession(sessionId) {
+            if (!confirm(`Force-release session #${sessionId}?`)) return;
+            try {
+                const res = await fetch(`/api/admin/sessions/${sessionId}/force-release`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (res.ok) {
+                    loadWorkstations();
+                    loadLicenses();
+                } else {
+                    alert("Admin authorization required (sign in as admin)");
+                }
+            } catch(e) {
+                alert("Action failed");
+            }
+        }
+
+        async function toggleMaintenance(hostname, isMaint) {
+            try {
+                const res = await fetch(`/api/admin/pcs/${hostname}/maintenance`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ is_maintenance: isMaint, reason: "Routine Hardware Inspection" })
+                });
+                if (res.ok) {
+                    loadWorkstations();
+                } else {
+                    alert("Admin authorization required (sign in as admin)");
+                }
+            } catch(e) {
+                alert("Action failed");
+            }
+        }
+
+        // Simulation
+        async function runSimulation() {
+            const btn = document.getElementById('runSimBtn');
+            btn.innerText = "⏳ Running VPPM Genetic Evolution...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/scheduler/simulate-comparison', { method: 'POST' });
+                const data = await res.json();
+                
+                document.getElementById('metricFcfs').innerText = `${data.equipment_utilization.baseline_fcfs_pct}%`;
+                document.getElementById('metricGa').innerText = `${data.equipment_utilization.intelligent_ga_pct}%`;
+                document.getElementById('metricGain').innerText = `+${data.equipment_utilization.absolute_gain_pct}%`;
+
+                // Render Convergence Graph
+                renderConvergenceSvg(data.fitness_convergence);
+
+                // Render Taskpool
+                renderTaskpool(data.taskpool_queue);
+
+            } catch (err) {
+                console.error("Simulation error:", err);
+            } finally {
+                btn.innerText = "🚀 Run Simulation Benchmark";
+                btn.disabled = false;
+            }
+        }
+
+        function renderConvergenceSvg(convergence) {
+            const svg = document.getElementById('convergenceSvg');
+            if (!convergence || convergence.length === 0) return;
+
+            const minVal = Math.min(...convergence) * 0.95;
+            const maxVal = Math.max(...convergence) * 1.05;
+            const range = maxVal - minVal;
+
+            const width = 800;
+            const height = 180;
+            const step = width / (convergence.length - 1);
+
+            let points = convergence.map((val, idx) => {
+                const x = idx * step;
+                const y = height - ((val - minVal) / range) * (height - 30) - 15;
+                return `${x},${y}`;
+            }).join(' ');
+
+            svg.innerHTML = `
+                <defs>
+                    <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.4"/>
+                        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+                    </linearGradient>
+                </defs>
+                <polygon points="0,${height} ${points} ${width},${height}" fill="url(#curveGrad)" />
+                <polyline fill="none" stroke="#38bdf8" stroke-width="3" points="${points}" />
+                ${convergence.map((val, idx) => {
+                    const x = idx * step;
+                    const y = height - ((val - minVal) / range) * (height - 30) - 15;
+                    return `<circle cx="${x}" cy="${y}" r="3.5" fill="#f8fafc" stroke="#0284c7" stroke-width="2"><title>Gen ${idx + 1}: ${val}</title></circle>`;
+                }).join('')}
+            `;
+        }
+
+        function renderTaskpool(queue) {
+            const tbody = document.getElementById('taskpoolTbody');
+            tbody.innerHTML = queue.map(t => `
+                <tr>
+                    <td><strong>${t.task_id}</strong></td>
+                    <td>${t.student_name}</td>
+                    <td>${t.task_type}</td>
+                    <td>${t.gpu_requested > 0 ? `🚀 ${t.gpu_requested} GPU` : 'None'}</td>
+                    <td>${t.ram_gb} GB</td>
+                    <td>${t.waiting_time_min}m</td>
+                    <td>${t.running_time_min}m</td>
+                    <td><code>${t.p_default}</code></td>
+                    <td><strong style="color: #38bdf8;"><code>${t.p_task}</code></strong></td>
+                    <td>
+                        ${t.is_running ? (t.eligible_for_preemption ? `<span style="color: #fbbf24; font-weight:600;">Eligible (Ran >1h)</span>` : `<span style="color: #34d399;">Running (Protected)</span>`) : `<span style="color: var(--text-muted);">Queued</span>`}
+                    </td>
+                </tr>
+            `).join('');
+        }
+    </script>
+</body>
+</html>

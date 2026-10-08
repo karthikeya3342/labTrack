@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+venv/
+.pg_data/
+.pg_socket/
+.postgres_dist/
+.git_bin/
+*.log

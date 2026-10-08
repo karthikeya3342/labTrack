@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec /home/karthikeya/labTrack/.git_bin/usr/bin/git --exec-path=/home/karthikeya/labTrack/.git_bin/usr/lib/git-core "$@"

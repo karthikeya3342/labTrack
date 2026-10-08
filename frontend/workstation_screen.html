@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LabTrack Workstation Greeter & Lock Screen</title>
+    <style>
+        :root {
+            --bg-color: #090d16;
+            --panel-bg: rgba(22, 32, 50, 0.92);
+            --border: #28374e;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --color-avail: #10b981;
+            --color-held: #f59e0b;
+            --color-occupied: #6366f1;
+            --color-maint: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        
+        body {
+            background: radial-gradient(circle at 50% 20%, #172554, var(--bg-color) 70%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        /* Top Status Bar */
+        .top-bar {
+            padding: 1.25rem 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .host-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .host-badge {
+            background: #1e293b;
+            border: 1px solid #334155;
+            padding: 0.4rem 0.9rem;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 0.5px;
+        }
+
+        .net-badges {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .net-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.9rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .net-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .net-yellow { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .net-red { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        .indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+        /* Main Kiosk Container */
+        .kiosk-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .kiosk-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 520px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            backdrop-filter: blur(16px);
+            text-align: center;
+            position: relative;
+        }
+
+        .state-banner {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1.25rem;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .banner-AVAILABLE { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid var(--color-avail); }
+        .banner-HELD { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid var(--color-held); }
+        .banner-OCCUPIED { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid var(--color-occupied); }
+        .banner-MAINTENANCE { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid var(--color-maint); }
+
+        .kiosk-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .kiosk-sub { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.75rem; line-height: 1.5; }
+
+        /* Reserved Held Details Box */
+        .reserved-box {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 10px;
+            padding: 1.25rem;
+            margin-bottom: 1.75rem;
+            text-align: left;
+        }
+
+        .reserved-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .reserved-label { color: var(--text-muted); }
+        .reserved-value { font-weight: 600; color: var(--text-main); }
+        .countdown-timer { font-size: 1.35rem; font-weight: 800; color: #fbbf24; text-align: center; margin-top: 0.75rem; }
+
+        /* Form */
+        .form-group { text-align: left; margin-bottom: 1.25rem; }
+        label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; font-weight: 500; }
+        input {
+            width: 100%;
+            background: #111827;
+            border: 1px solid #374151;
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus { border-color: var(--accent); }
+
+        .btn-unlock {
+            width: 100%;
+            background: linear-gradient(135deg, #0284c7, #2563eb);
+            color: white;
+            border: none;
+            padding: 0.9rem;
+            border-radius: 8px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn-unlock:hover { opacity: 0.95; }
+        .btn-unlock:active { transform: scale(0.99); }
+
+        .btn-logout {
+            width: 100%;
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.8rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 1.5rem;
+        }
+
+        /* Occupied Session Box */
+        .session-box {
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .metric-cell {
+            background: #141c2c;
+            border: 1px solid #233147;
+            padding: 0.6rem;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .metric-num { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+        .metric-lbl { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* Error/Message Box */
+        .msg-box {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            display: none;
+            line-height: 1.4;
+        }
+        .msg-error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; display: block; }
+        .msg-success { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; display: block; }
+
+        /* Footer */
+        footer {
+            padding: 1rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #475569;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="host-title">
+            <span class="host-badge" id="hostBadge">COMP-PC-01</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted);" id="labNameDisplay">Computing Lab</span>
+        </div>
+        <div class="net-badges">
+            <div class="net-pill net-green" id="lanPill">
+                <span class="indicator-dot"></span>
+                <span>LAN Connected to Lab Server</span>
+            </div>
+            <div class="net-pill net-yellow" id="wanPill">
+                <span class="indicator-dot"></span>
+                <span>Campus Internet Locked (Captive Portal)</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="kiosk-container">
+        <div class="kiosk-card">
+            
+            <div id="stateBadge" class="state-banner banner-AVAILABLE">
+                🟢 Workstation Available
+            </div>
+
+            <div id="availableView">
+                <h2 class="kiosk-title">Log In to Workstation</h2>
+                <p class="kiosk-sub">Machine is available for walk-in access. Enter your university roll number and password to begin session.</p>
+
+                <form onsubmit="handleUnlock(event)">
+                    <div class="form-group">
+                        <label>Student Roll Number</label>
+                        <input type="text" id="walkinRoll" placeholder="e.g. STU001" required autocomplete="off" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="walkinPw" placeholder="Enter password" required />
+                    </div>
+                    <button type="submit" class="btn-unlock" id="unlockBtn">🔓 Unlock Workstation</button>
+                </form>
+            </div>
+
+            <div id="heldView" style="display: none;">
+                <h2 class="kiosk-title">Workstation Reserved</h2>
+                <p class="kiosk-sub">This PC is reserved. Only the assigned student can authenticate to unlock.</p>
+
+                <div class="reserved-box">
+                    <div class="reserved-row">
+                        <span class="reserved-label">Assigned Student:</span>
+                        <span class="reserved-value" id="heldStudentName">Alice Johnson</span>
+                    </div>
+                    <div class="reserved-row">
+                        <span class="reserved-label">Roll Number:</span>
+                        <span class="reserved-value" id="heldRollNo">STU001</span>
+                    </div>
+                    <div class="reserved-row">
+                        <span class="reserved-label">Grace Expiry:</span>
+                        <span class="reserved-value" id="heldGraceTime">10:45 AM</span>
+                    </div>
+                    <div class="countdown-timer" id="graceCountdown">14:59</div>
+                </div>
+
+                <form onsubmit="handleUnlock(event)">
+                    <div class="form-group">
+                        <label>Reserved Student Roll Number</label>
+                        <input type="text" id="heldRollInput" placeholder="Confirm Roll Number" required autocomplete="off" />
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="heldPwInput" placeholder="Enter password" required />
+                    </div>
+                    <button type="submit" class="btn-unlock">🔓 Unlock Reserved Session</button>
+                </form>
+            </div>
+
+            <div id="occupiedView" style="display: none;">
+                <h2 class="kiosk-title">Active Session in Progress</h2>
+                <p class="kiosk-sub">Workstation unlocked and sandbox active.</p>
+
+                <div class="session-box">
+                    <div class="reserved-row">
+                        <span class="reserved-label">Active User:</span>
+                        <span class="reserved-value" id="occStudentName">Alice Johnson</span>
+                    </div>
+                    <div class="reserved-row">
+                        <span class="reserved-label">Roll Number:</span>
+                        <span class="reserved-value" id="occRollNo">STU001</span>
+                    </div>
+                    <div class="reserved-row">
+                        <span class="reserved-label">Session ID:</span>
+                        <span class="reserved-value" id="occSessionId">#1</span>
+                    </div>
+
+                    <div class="metrics-grid">
+                        <div class="metric-cell">
+                            <div class="metric-num" id="occCpuLoad">4.2%</div>
+                            <div class="metric-lbl">CPU Usage</div>
+                        </div>
+                        <div class="metric-cell">
+                            <div class="metric-num" id="occMemLoad">18.5%</div>
+                            <div class="metric-lbl">RAM Usage</div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn-logout" onclick="handleLogout()">🔒 Logout & Re-lock Workstation</button>
+            </div>
+
+            <div id="maintenanceView" style="display: none;">
+                <h2 class="kiosk-title" style="color: #ef4444;">Workstation Offline</h2>
+                <p class="kiosk-sub">This workstation is undergoing scheduled maintenance or hardware diagnostics. Please use an adjacent machine.</p>
+            </div>
+
+            <div id="messageBox" class="msg-box"></div>
+        </div>
+    </div>
+
+    <footer>
+        LabTrack Kiosk Engine v1.0.0 &bull; Bound to Local LAN Control Plane &bull; cgroups v2 Sandboxed
+    </footer>
+
+    <script>
+        // Extract hostname from URL path (/workstation/COMP-PC-01) or query parameter (?hostname=COMP-PC-01)
+        function getHostname() {
+            const urlPath = window.location.pathname;
+            const parts = urlPath.split('/').filter(p => p.length > 0);
+            if (parts.length >= 2 && parts[0] === 'workstation') {
+                return decodeURIComponent(parts[1]);
+            }
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('hostname') || 'COMP-PC-01';
+        }
+
+        const HOSTNAME = getHostname();
+        let currentLockState = null;
+        let remainingGraceSeconds = 0;
+        let countdownTimer = null;
+        let currentActiveSessionId = null;
+
+        document.getElementById('hostBadge').innerText = HOSTNAME;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchLockState();
+            // Poll lock-state over local switch every 2.5 seconds
+            setInterval(fetchLockState, 2500);
+            // Run countdown tick every second
+            setInterval(tickCountdown, 1000);
+        });
+
+        async function fetchLockState() {
+            try {
+                const res = await fetch(`/api/pcs/${HOSTNAME}/lock-state`);
+                if (!res.ok) throw new Error("Server error");
+                const data = await res.json();
+                
+                // Set LAN badge green
+                document.getElementById('lanPill').className = "net-pill net-green";
+                document.getElementById('lanPill').innerHTML = `<span class="indicator-dot"></span><span>LAN Connected to Lab Server</span>`;
+
+                applyLockState(data);
+            } catch (err) {
+                // LAN offline
+                document.getElementById('lanPill').className = "net-pill net-red";
+                document.getElementById('lanPill').innerHTML = `<span class="indicator-dot"></span><span>LAN Disconnected (Check Ethernet cable)</span>`;
+            }
+        }
+
+        function applyLockState(data) {
+            currentLockState = data;
+            document.getElementById('labNameDisplay').innerText = data.lab_name;
+
+            const stateBadge = document.getElementById('stateBadge');
+            stateBadge.className = `state-banner banner-${data.state}`;
+            stateBadge.innerText = data.state;
+
+            // View toggles
+            document.getElementById('availableView').style.display = 'none';
+            document.getElementById('heldView').style.display = 'none';
+            document.getElementById('occupiedView').style.display = 'none';
+            document.getElementById('maintenanceView').style.display = 'none';
+
+            if (data.state === 'AVAILABLE') {
+                document.getElementById('availableView').style.display = 'block';
+                stateBadge.innerText = "🟢 Workstation Available";
+                setWanStatus(false);
+            } else if (data.state === 'HELD') {
+                document.getElementById('heldView').style.display = 'block';
+                stateBadge.innerText = "🔒 Workstation Reserved";
+                document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
+                document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
+                document.getElementById('heldRollInput').value = data.reserved_roll_no || '';
+                if (data.grace_deadline) {
+                    document.getElementById('heldGraceTime').innerText = new Date(data.grace_deadline).toLocaleTimeString();
+                }
+                remainingGraceSeconds = data.remaining_grace_seconds || 0;
+                setWanStatus(false);
+            } else if (data.state === 'OCCUPIED') {
+                document.getElementById('occupiedView').style.display = 'block';
+                stateBadge.innerText = "⚡ Session Active";
+                if (data.active_session) {
+                    currentActiveSessionId = data.active_session.session_id;
+                    document.getElementById('occStudentName').innerText = data.active_session.student_name;
+                    document.getElementById('occRollNo').innerText = data.active_session.roll_no;
+                    document.getElementById('occSessionId').innerText = `#${data.active_session.session_id}`;
+                    document.getElementById('occCpuLoad').innerText = `${data.active_session.cpu_percent || 3.5}%`;
+                    document.getElementById('occMemLoad').innerText = `${data.active_session.memory_percent || 14.2}%`;
+                }
+                setWanStatus(true);
+            } else if (data.state === 'MAINTENANCE') {
+                document.getElementById('maintenanceView').style.display = 'block';
+                stateBadge.innerText = "⚠️ Maintenance Mode";
+                setWanStatus(false);
+            }
+        }
+
+        function setWanStatus(unlocked) {
+            const pill = document.getElementById('wanPill');
+            if (unlocked) {
+                pill.className = "net-pill net-green";
+                pill.innerHTML = `<span class="indicator-dot"></span><span>Campus Internet Active (Captive Portal Bridge)</span>`;
+            } else {
+                pill.className = "net-pill net-yellow";
+                pill.innerHTML = `<span class="indicator-dot"></span><span>Campus Internet Locked (Captive Portal)</span>`;
+            }
+        }
+
+        function tickCountdown() {
+            if (currentLockState && currentLockState.state === 'HELD' && remainingGraceSeconds > 0) {
+                remainingGraceSeconds--;
+                const mins = Math.floor(remainingGraceSeconds / 60);
+                const secs = remainingGraceSeconds % 60;
+                document.getElementById('graceCountdown').innerText = 
+                    `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+        }
+
+        async function handleUnlock(e) {
+            e.preventDefault();
+            showMessage("", "");
+
+            let rollNo = "";
+            let password = "";
+
+            if (currentLockState.state === 'HELD') {
+                rollNo = document.getElementById('heldRollInput').value.trim();
+                password = document.getElementById('heldPwInput').value;
+            } else {
+                rollNo = document.getElementById('walkinRoll').value.trim();
+                password = document.getElementById('walkinPw').value;
+            }
+
+            try {
+                const res = await fetch('/api/agent/checkin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        hostname: HOSTNAME,
+                        roll_no: rollNo,
+                        password: password,
+                        cgroup_path: `/sys/fs/cgroup/labtrack/session_${rollNo}`,
+                        workspace_path: `/tmp/labtrack/workspace_${rollNo}`
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    showMessage("Access granted! Unlocking workstation session...", "msg-success");
+                    currentActiveSessionId = data.session_id;
+                    setTimeout(fetchLockState, 500);
+                } else {
+                    // Strict Access Enforcement error message
+                    showMessage(data.detail || "Authentication failed", "msg-error");
+                }
+            } catch (err) {
+                showMessage("Connection error reaching lab server", "msg-error");
+            }
+        }
+
+        async function handleLogout() {
+            if (!currentActiveSessionId) return;
+            if (!confirm("Are you sure you want to log out and lock this workstation?")) return;
+
+            try {
+                const res = await fetch('/api/agent/close', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: currentActiveSessionId,
+                        reason: "Student voluntarily logged out"
+                    })
+                });
+                if (res.ok) {
+                    currentActiveSessionId = null;
+                    fetchLockState();
+                } else {
+                    alert("Logout failed");
+                }
+            } catch (e) {
+                alert("Error connecting to server");
+            }
+        }
+
+        function showMessage(text, className) {
+            const box = document.getElementById('messageBox');
+            if (!text) {
+                box.style.display = 'none';
+                return;
+            }
+            box.innerText = text;
+            box.className = `msg-box ${className}`;
+        }
+    </script>
+</body>
+</html>

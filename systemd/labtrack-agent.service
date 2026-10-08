@@ -1,0 +1,25 @@
+[Unit]
+Description=LabTrack Workstation Machine Plane Agent Daemon
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/home/karthikeya/labTrack
+Environment="LABTRACK_SERVER_URL=http://127.0.0.1:8000"
+Environment="LABTRACK_HOSTNAME=COMP-PC-01"
+Environment="CAPTIVE_PORTAL_URL=https://10.10.10.2:8090/httpclient.html"
+ExecStart=/usr/bin/python3 /home/karthikeya/labTrack/agent/labtrack_agent.py
+Restart=always
+RestartSec=5s
+
+# Security and Isolation settings
+ProtectSystem=strict
+ReadWritePaths=/sys/fs/cgroup/labtrack /tmp/labtrack /home/karthikeya/labTrack
+KillMode=mixed
+TimeoutStopSec=10s
+
+[Install]
+WantedBy=multi-user.target
