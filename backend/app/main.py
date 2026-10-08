@@ -1,7 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
@@ -58,6 +58,22 @@ async def serve_workstation_screen(hostname: str):
     if os.path.exists(screen_path):
         return FileResponse(screen_path, media_type="text/html")
     return HTMLResponse(f"<h1>LabTrack Workstation Screen for {hostname}</h1>")
+
+@app.get("/install-agent.sh", response_class=PlainTextResponse)
+async def serve_agent_installer():
+    script_path = os.path.join(PROJECT_ROOT, "scripts/install_agent_client.sh")
+    if os.path.exists(script_path):
+        with open(script_path, "r") as f:
+            return PlainTextResponse(f.read())
+    return PlainTextResponse("#!/bin/sh\necho 'Not found'\n")
+
+@app.get("/agent/labtrack_agent.py", response_class=PlainTextResponse)
+async def serve_agent_script():
+    agent_path = os.path.join(PROJECT_ROOT, "agent/labtrack_agent.py")
+    if os.path.exists(agent_path):
+        with open(agent_path, "r") as f:
+            return PlainTextResponse(f.read())
+    return PlainTextResponse("# Not found\n")
 
 @app.get("/health")
 async def health_check():
