@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
 from backend.app.core.database import init_db_pool, close_db_pool
-from backend.app.api import auth, pcs, reservations, agent, admin, scheduler
+from backend.app.api import auth, pcs, reservations, agent, admin, scheduler, clubs, faculty
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,9 +39,15 @@ app.include_router(reservations.router, prefix=settings.API_V1_STR)
 app.include_router(agent.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 app.include_router(scheduler.router, prefix=settings.API_V1_STR)
+app.include_router(clubs.router, prefix=settings.API_V1_STR)
+app.include_router(faculty.router, prefix=settings.API_V1_STR)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
+STATIC_DIR = os.path.join(FRONTEND_DIR, "static")
+
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Serve Web Portal (Student & Admin Dashboard)
 @app.get("/", response_class=HTMLResponse)

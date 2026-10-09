@@ -133,6 +133,8 @@
         <button class="tab-btn active" onclick="switchTab('gridTab')">🖥️ Live Workstation Grid</button>
         <button class="tab-btn" onclick="switchTab('bookingTab')">📅 Advance Booking</button>
         <button class="tab-btn" onclick="switchTab('myReservationsTab')">🎟️ My Reservations</button>
+        <button class="tab-btn" onclick="switchTab('facultyTab')">👨‍🏫 Faculty Extra Labs</button>
+        <button class="tab-btn" onclick="switchTab('clubsTab')">🚀 Technical Clubs</button>
         <button class="tab-btn" onclick="switchTab('adminTab')">⚙️ Admin Operations</button>
         <button class="tab-btn" onclick="switchTab('simulationTab')">🔬 Research Paper GA Simulation</button>
     </nav>
@@ -255,7 +257,215 @@
             </div>
         </div>
 
-        <!-- TAB 4: ADMIN OPERATIONS -->
+        <!-- TAB: FACULTY EXTRA LABS -->
+        <div id="facultyTab" class="tab-content">
+            <div class="card" style="max-width: 900px; margin: 0 auto 1.5rem auto;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">👨‍🏫 Faculty On-Demand Extra Lab Reservation</div>
+                        <div class="subtitle">Book practical / makeup lab sessions without rigid curriculum constraints</div>
+                    </div>
+                </div>
+                <div class="banner">
+                    💡 <strong>Indian Engineering College Operating Rules:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.25rem; line-height: 1.5;">
+                        <li><strong>Constraint M1 (Single Lab/Day):</strong> A student cohort (e.g. 3rd Year CSE-A) cannot be assigned more than 1 practical lab on any single calendar day.</li>
+                        <li><strong>Constraint M5 (Large Class Split):</strong> Large batches (e.g. 107 students) are automatically partitioned across multiple labs. Unused workstations in partially filled labs remain completely <strong>AVAILABLE</strong> for walk-ins.</li>
+                        <li><strong>Constraint M2 (Faculty Clash):</strong> Prevents double-booking requesting faculty across simultaneous rooms.</li>
+                    </ul>
+                </div>
+                <form id="facultyExtraLabForm" onsubmit="handleReserveExtraLab(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Course / Subject Name</label>
+                            <input type="text" id="facultyCourseName" placeholder="e.g. Operating Systems Lab" required />
+                        </div>
+                        <div class="form-group">
+                            <label>Student Batch / Cohort Name</label>
+                            <input type="text" id="facultyBatchName" placeholder="e.g. 3rd Year CSE - Section A" required />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Total Student Headcount (e.g. 107 students)</label>
+                            <input type="number" id="facultyStudentCount" min="1" max="500" value="107" required />
+                        </div>
+                        <div class="form-group">
+                            <label>Preferred Starting Lab</label>
+                            <select id="facultyPreferredLab">
+                                <option value="1">Lab 1: Computing Lab (General Coding)</option>
+                                <option value="2">Lab 2: Software Engineering (Modeling & Dev)</option>
+                                <option value="3">Lab 3: AI & High Perf Lab (RTX 4090)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Start Date & Time</label>
+                            <input type="datetime-local" id="facultyStartTime" required />
+                        </div>
+                        <div class="form-group">
+                            <label>End Date & Time</label>
+                            <input type="datetime-local" id="facultyEndTime" required />
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label>Notes / Purpose</label>
+                        <input type="text" id="facultyNotes" placeholder="Extra practical / makeup lab session" value="Extra practical / makeup lab session" />
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%; padding: 0.8rem; font-size: 1rem; background: linear-gradient(135deg, #0284c7, #6366f1); color: white;">
+                        📅 Reserve Extra Lab Session
+                    </button>
+                </form>
+                <div id="facultyResultMsg" style="margin-top: 1.25rem;"></div>
+            </div>
+        </div>
+
+        <!-- TAB: TECHNICAL CLUBS -->
+        <div id="clubsTab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">🚀 Technical Coding Clubs</div>
+                        <div class="subtitle">Official student technical clubs: GDG, BitSquad, DataWorks, ElectroniX, CAD & Robotics</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadClubsData()">🔄 Refresh</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;" id="clubsShowcaseGrid">
+                    <!-- Dynamic Club Cards -->
+                </div>
+            </div>
+
+            <!-- Club Lead Event Request Card -->
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">📝 Request Lab Allocation for Club Event</div>
+                        <div class="subtitle">Club leads can submit event proposals for administrator approval and lab reservation</div>
+                    </div>
+                </div>
+                <form id="clubEventRequestForm" onsubmit="handleRequestClubEvent(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Select Technical Club</label>
+                            <select id="clubEventClubSelect" required>
+                                <option value="1">GDG (Google Developer Groups)</option>
+                                <option value="2">BitSquad (Competitive Coding & Algorithmic Dev)</option>
+                                <option value="3">DataWorks (Data Science & ML)</option>
+                                <option value="4">ElectroniX (Embedded Systems & IoT)</option>
+                                <option value="5">CAD Design & Robotics Club</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Event Title</label>
+                            <input type="text" id="clubEventTitleInput" placeholder="e.g. Intro to Development" required />
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Event Description & Agenda</label>
+                        <textarea id="clubEventDescInput" rows="2" placeholder="Brief outline of the workshop or hackathon..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Primary Lab</label>
+                            <select id="clubEventPrimaryLab" required>
+                                <option value="1">Lab 1: Computing Lab (General Coding)</option>
+                                <option value="2">Lab 2: Software Engineering</option>
+                                <option value="3">Lab 3: AI & High Perf Lab</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Secondary Lab (Optional for multi-lab events)</label>
+                            <select id="clubEventSecondaryLab">
+                                <option value="">None (Single Lab)</option>
+                                <option value="1">Lab 1: Computing Lab</option>
+                                <option value="2">Lab 2: Software Engineering</option>
+                                <option value="3">Lab 3: AI & High Perf Lab</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Start Date & Time</label>
+                            <input type="datetime-local" id="clubEventStartTime" required />
+                        </div>
+                        <div class="form-group">
+                            <label>End Date & Time</label>
+                            <input type="datetime-local" id="clubEventEndTime" required />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn" style="background: linear-gradient(135deg, #10b981, #0284c7); color: white; width: 100%; padding: 0.8rem; font-size: 1rem;">
+                        📨 Submit Event Request for Admin Approval
+                    </button>
+                </form>
+                <div id="clubEventResultMsg" style="margin-top: 1rem;"></div>
+            </div>
+
+            <!-- Club Events & Live Attendance Roster Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">📅 Club Events & Live Attendance Roster</div>
+                        <div class="subtitle">Track approved workshops, participant logins, and attendance metrics</div>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Club</th>
+                                <th>Event Title</th>
+                                <th>Organized By</th>
+                                <th>Allocated Lab(s)</th>
+                                <th>Scheduled Time</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clubEventsTbody">
+                            <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading club events...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Live Attendance Roster Viewer -->
+                <div id="clubRosterSection" style="display: none; margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                    <div class="card-header" style="margin-bottom: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <img id="rosterClubLogo" src="" alt="Club Logo" style="height: 48px; width: 48px; object-fit: contain;" />
+                            <div>
+                                <div class="card-title" id="rosterEventTitle">Event Title</div>
+                                <div class="subtitle" id="rosterClubName">Club Name &bull; Live Attendance Roster</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <span class="user-tag" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 700;" id="rosterActiveCount">0 Active Now</span>
+                            <span class="user-tag" id="rosterTotalCount">0 Total Attendees</span>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Roll No</th>
+                                    <th>Student Name</th>
+                                    <th>Workstation</th>
+                                    <th>Check-in Time</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rosterTbody">
+                                <!-- Dynamic roster rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: ADMIN OPERATIONS -->
         <div id="adminTab" class="tab-content">
             <div class="card">
                 <div class="card-header">
@@ -317,6 +527,64 @@
                         </thead>
                         <tbody id="adminPcsTbody">
                             <!-- Dynamic admin PC rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin Club Event Approvals Queue -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">⚡ Technical Club Event Approvals Queue</div>
+                        <div class="subtitle">Review pending event requests, allocate entire laboratories, and enable branded kiosk lock screens</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadAdminClubEvents()">🔄 Refresh Requests</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Event ID</th>
+                                <th>Club</th>
+                                <th>Event Title</th>
+                                <th>Organizer</th>
+                                <th>Requested Lab(s)</th>
+                                <th>Time Window</th>
+                                <th>Status</th>
+                                <th>Admin Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminClubEventsTbody">
+                            <tr><td colspan="8" style="text-align: center; color: var(--text-muted);">Loading pending events...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Admin User Management & Role Promotion -->
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">👥 User Management & Role Promotion</div>
+                        <div class="subtitle">Promote users to Faculty (on-demand lab booking) or Club Lead (requesting lab allocations)</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadAdminUsers()">🔄 Refresh Users</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Roll / ID</th>
+                                <th>Full Name</th>
+                                <th>Email</th>
+                                <th>Current Role</th>
+                                <th>Promote / Change Role</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTbody">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading users...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -461,7 +729,9 @@
             document.getElementById(tabId).classList.add('active');
 
             if (tabId === 'myReservationsTab') loadMyReservations();
-            if (tabId === 'adminTab') { loadLicenses(); loadAdminPcs(); loadAdminTelemetry(); }
+            if (tabId === 'facultyTab') initFacultyTimes();
+            if (tabId === 'clubsTab') { loadClubsData(); loadClubEvents(); }
+            if (tabId === 'adminTab') { loadLicenses(); loadAdminPcs(); loadAdminTelemetry(); loadAdminClubEvents(); loadAdminUsers(); }
         }
 
         async function quickLogin(rollNo, password) {
@@ -981,6 +1251,380 @@
                     </td>
                 </tr>
             `).join('');
+        }
+
+        // Faculty Extra Labs Functions
+        function initFacultyTimes() {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 15);
+            const later = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+            const pad = (n) => String(n).padStart(2, '0');
+            const formatForInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            
+            const startInput = document.getElementById('facultyStartTime');
+            const endInput = document.getElementById('facultyEndTime');
+            if (startInput && !startInput.value) startInput.value = formatForInput(now);
+            if (endInput && !endInput.value) endInput.value = formatForInput(later);
+        }
+
+        async function handleReserveExtraLab(e) {
+            e.preventDefault();
+            const msg = document.getElementById('facultyResultMsg');
+            msg.innerHTML = '<span style="color: var(--accent-blue);">⏳ Calculating cohort multi-lab partition and checking M1 single-lab rule...</span>';
+
+            if (!authToken) {
+                msg.innerHTML = '<span style="color: #ef4444;">❌ Please log in with a Faculty or Admin account.</span>';
+                return;
+            }
+
+            const body = {
+                course_name: document.getElementById('facultyCourseName').value.trim(),
+                batch_name: document.getElementById('facultyBatchName').value.trim(),
+                student_count: parseInt(document.getElementById('facultyStudentCount').value, 10),
+                preferred_lab_id: parseInt(document.getElementById('facultyPreferredLab').value, 10),
+                start_time: new Date(document.getElementById('facultyStartTime').value).toISOString(),
+                end_time: new Date(document.getElementById('facultyEndTime').value).toISOString(),
+                notes: document.getElementById('facultyNotes').value.trim()
+            };
+
+            try {
+                const res = await fetch('/api/faculty/reserve-extra-lab', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    let partitionHtml = (data.lab_partition_plan || []).map(p => `
+                        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 0.6rem 0.8rem; margin-top: 0.4rem;">
+                            <strong>${p.lab_name}</strong>: <span>${p.allocated_students} students seated</span> &bull; 
+                            <span style="color: #34d399;">${p.spare_pcs_available_for_others} spare workstations left open for walk-ins</span>
+                        </div>
+                    `).join('');
+
+                    msg.innerHTML = `
+                        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px; padding: 1rem;">
+                            <div style="color: #34d399; font-weight: 700; font-size: 1rem;">
+                                ✅ ${data.message}
+                            </div>
+                            <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 0.5rem;">
+                                <strong>Course:</strong> ${data.course_name} | <strong>Batch:</strong> ${data.batch_name} | <strong>Seated:</strong> ${data.total_students_seated}
+                            </div>
+                            <div style="margin-top: 0.6rem;">
+                                <strong>Laboratory Partition Distribution:</strong>
+                                ${partitionHtml}
+                            </div>
+                        </div>
+                    `;
+                    loadWorkstations();
+                } else {
+                    msg.innerHTML = `
+                        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; border-radius: 8px; padding: 0.9rem; color: #f87171;">
+                            <strong>❌ Reservation Rejected:</strong> ${data.detail || "Error booking extra lab"}
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                msg.innerHTML = `<span style="color: #ef4444;">❌ Network error contacting server</span>`;
+            }
+        }
+
+        // Technical Clubs Functions
+        async function loadClubsData() {
+            try {
+                const res = await fetch('/api/clubs');
+                if (!res.ok) return;
+                const clubs = await res.json();
+                const container = document.getElementById('clubsShowcaseGrid');
+                container.innerHTML = clubs.map(c => `
+                    <div style="background: #182234; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; text-align: center;">
+                        <img src="${c.logo_url}" alt="${c.name}" style="height: 56px; width: 56px; object-fit: contain; margin-bottom: 0.75rem;" />
+                        <div style="font-weight: 700; font-size: 1.05rem; color: #f8fafc; margin-bottom: 0.3rem;">${c.name}</div>
+                        <div style="font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">${c.description}</div>
+                        <div style="margin-top: 0.8rem; font-size: 0.75rem; color: var(--accent-blue);">Official Technical Club</div>
+                    </div>
+                `).join('');
+                initClubTimes();
+            } catch (err) {
+                console.error("Clubs load error:", err);
+            }
+        }
+
+        function initClubTimes() {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 30);
+            const later = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+            const pad = (n) => String(n).padStart(2, '0');
+            const formatForInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            
+            const startInput = document.getElementById('clubEventStartTime');
+            const endInput = document.getElementById('clubEventEndTime');
+            if (startInput && !startInput.value) startInput.value = formatForInput(now);
+            if (endInput && !endInput.value) endInput.value = formatForInput(later);
+        }
+
+        async function handleRequestClubEvent(e) {
+            e.preventDefault();
+            const msg = document.getElementById('clubEventResultMsg');
+            msg.innerHTML = '<span style="color: var(--accent-blue);">⏳ Submitting club event request...</span>';
+
+            if (!authToken) {
+                msg.innerHTML = '<span style="color: #ef4444;">❌ Please log in as Club Lead or Admin.</span>';
+                return;
+            }
+
+            const secLabVal = document.getElementById('clubEventSecondaryLab').value;
+            const body = {
+                club_id: parseInt(document.getElementById('clubEventClubSelect').value, 10),
+                title: document.getElementById('clubEventTitleInput').value.trim(),
+                description: document.getElementById('clubEventDescInput').value.trim(),
+                lab_id: parseInt(document.getElementById('clubEventPrimaryLab').value, 10),
+                secondary_lab_id: secLabVal ? parseInt(secLabVal, 10) : null,
+                start_time: new Date(document.getElementById('clubEventStartTime').value).toISOString(),
+                end_time: new Date(document.getElementById('clubEventEndTime').value).toISOString()
+            };
+
+            try {
+                const res = await fetch('/api/clubs/events/request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    msg.innerHTML = `<span style="color: #34d399;">✅ ${data.message}</span>`;
+                    document.getElementById('clubEventTitleInput').value = '';
+                    loadClubEvents();
+                    loadAdminClubEvents();
+                } else {
+                    msg.innerHTML = `<span style="color: #ef4444;">❌ Request failed: ${data.detail}</span>`;
+                }
+            } catch (err) {
+                msg.innerHTML = `<span style="color: #ef4444;">❌ Network error</span>`;
+            }
+        }
+
+        async function loadClubEvents() {
+            const tbody = document.getElementById('clubEventsTbody');
+            try {
+                const res = await fetch('/api/clubs/events');
+                if (!res.ok) return;
+                const events = await res.json();
+                if (events.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No club events scheduled yet.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = events.map(e => `
+                    <tr>
+                        <td>#${e.id}</td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <img src="${e.logo_url}" alt="${e.club_name}" style="height: 24px; width: 24px; object-fit: contain;" />
+                                <strong>${e.club_name}</strong>
+                            </div>
+                        </td>
+                        <td><strong>${e.title}</strong></td>
+                        <td>${e.lead_name || 'Club Lead'} (${e.lead_roll_no || '-'})</td>
+                        <td>${e.lab_name}${e.secondary_lab_name ? ` &amp; ${e.secondary_lab_name}` : ''}</td>
+                        <td>${new Date(e.start_time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})} - ${new Date(e.end_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                        <td><span class="status-badge badge-${e.status === 'APPROVED' ? 'AVAILABLE' : (e.status === 'PENDING' ? 'HELD' : 'MAINTENANCE')}">${e.status}</span></td>
+                        <td>
+                            <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="viewEventRoster(${e.id})">
+                                👥 Live Roster
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Club events error:", err);
+            }
+        }
+
+        async function viewEventRoster(eventId) {
+            const section = document.getElementById('clubRosterSection');
+            section.style.display = 'block';
+            section.scrollIntoView({ behavior: 'smooth' });
+
+            try {
+                const res = await fetch(`/api/clubs/events/${eventId}/roster`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                document.getElementById('rosterClubLogo').src = data.event.logo_url;
+                document.getElementById('rosterEventTitle').innerText = data.event.title;
+                document.getElementById('rosterClubName').innerText = `${data.event.club_name} • ${data.event.lab_name} • Live Attendance`;
+                document.getElementById('rosterActiveCount').innerText = `${data.metrics.active_now} Active Now`;
+                document.getElementById('rosterTotalCount').innerText = `${data.metrics.total_attendees} Total Attendees`;
+
+                const tbody = document.getElementById('rosterTbody');
+                if (data.roster.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1rem;">No participants have logged into event workstations yet.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = data.roster.map(r => `
+                    <tr>
+                        <td><strong>${r.roll_no}</strong></td>
+                        <td>${r.student_name}</td>
+                        <td><code>${r.hostname}</code></td>
+                        <td>${new Date(r.checkin_time).toLocaleTimeString()}</td>
+                        <td>${r.duration_minutes} mins</td>
+                        <td><span class="status-badge badge-${r.session_status === 'ACTIVE' ? 'AVAILABLE' : 'MAINTENANCE'}">${r.session_status}</span></td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Roster error:", err);
+            }
+        }
+
+        // Admin Club Events & User Management
+        async function loadAdminClubEvents() {
+            const tbody = document.getElementById('adminClubEventsTbody');
+            try {
+                const res = await fetch('/api/clubs/events');
+                if (!res.ok) return;
+                const events = await res.json();
+                if (events.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No club events requested.</td></tr>`;
+                    return;
+                }
+                tbody.innerHTML = events.map(e => `
+                    <tr>
+                        <td>#${e.id}</td>
+                        <td><strong>${e.club_name}</strong></td>
+                        <td>${e.title}</td>
+                        <td>${e.lead_name || 'Lead'} (${e.lead_roll_no || '-'})</td>
+                        <td>${e.lab_name}${e.secondary_lab_name ? ` + ${e.secondary_lab_name}` : ''}</td>
+                        <td>${new Date(e.start_time).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})} - ${new Date(e.end_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</td>
+                        <td><span class="status-badge badge-${e.status === 'APPROVED' ? 'AVAILABLE' : (e.status === 'PENDING' ? 'HELD' : 'MAINTENANCE')}">${e.status}</span></td>
+                        <td>
+                            ${e.status === 'PENDING' ? `
+                                <button class="btn btn-success" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.3rem;" onclick="approveClubEvent(${e.id})">✅ Approve &amp; Allocate</button>
+                                <button class="btn btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="rejectClubEvent(${e.id})">❌ Reject</button>
+                            ` : `<span style="font-size: 0.8rem; color: var(--text-muted);">${e.status}</span>`}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Admin club events error:", err);
+            }
+        }
+
+        async function approveClubEvent(eventId) {
+            if (!confirm(`Approve event #${eventId} and reserve all workstations in requested laboratory?`)) return;
+            try {
+                const res = await fetch(`/api/admin/clubs/events/${eventId}/approve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ admin_notes: "Approved by Lab Administrator. Kiosk banners activated." })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message);
+                    loadAdminClubEvents();
+                    loadClubEvents();
+                    loadWorkstations();
+                } else {
+                    alert("Approval failed: " + data.detail);
+                }
+            } catch (err) {
+                alert("Network error");
+            }
+        }
+
+        async function rejectClubEvent(eventId) {
+            const reason = prompt("Enter rejection reason:", "Scheduling conflict with examinations");
+            if (!reason) return;
+            try {
+                const res = await fetch(`/api/admin/clubs/events/${eventId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ admin_notes: reason })
+                });
+                if (res.ok) {
+                    loadAdminClubEvents();
+                    loadClubEvents();
+                } else {
+                    alert("Action failed");
+                }
+            } catch (err) {
+                alert("Network error");
+            }
+        }
+
+        async function loadAdminUsers() {
+            const tbody = document.getElementById('adminUsersTbody');
+            if (!authToken) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Please log in as Admin.</td></tr>`;
+                return;
+            }
+            try {
+                const res = await fetch('/api/admin/users', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!res.ok) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Admin privileges required to view users.</td></tr>`;
+                    return;
+                }
+                const users = await res.json();
+                tbody.innerHTML = users.map(u => `
+                    <tr>
+                        <td>#${u.id}</td>
+                        <td><strong>${u.roll_no}</strong></td>
+                        <td>${u.name}</td>
+                        <td>${u.email}</td>
+                        <td><span class="user-tag" style="text-transform: capitalize;">${u.role}</span></td>
+                        <td>
+                            <div style="display: flex; gap: 0.4rem; align-items: center;">
+                                <select id="roleSelect_${u.id}" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">
+                                    <option value="student" ${u.role === 'student' ? 'selected' : ''}>Student</option>
+                                    <option value="faculty" ${u.role === 'faculty' ? 'selected' : ''}>Faculty</option>
+                                    <option value="club_lead" ${u.role === 'club_lead' ? 'selected' : ''}>Club Lead</option>
+                                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                                </select>
+                                <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;" onclick="updateUserRole(${u.id})">Save</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Admin users load error:", err);
+            }
+        }
+
+        async function updateUserRole(userId) {
+            const select = document.getElementById(`roleSelect_${userId}`);
+            const newRole = select.value;
+            try {
+                const res = await fetch(`/api/admin/users/${userId}/role`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ role: newRole })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message);
+                    loadAdminUsers();
+                } else {
+                    alert("Role update failed: " + data.detail);
+                }
+            } catch (err) {
+                alert("Network error");
+            }
         }
     </script>
 </body>

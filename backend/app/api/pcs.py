@@ -134,21 +134,34 @@ async def get_pc_lock_state(hostname: str):
     if state == "HELD":
         # Fetch the held reservation
         res = await fetch_one("""
-            SELECT r.id, r.grace_deadline, u.name as student_name, u.roll_no
+            SELECT r.id, r.grace_deadline, u.name as student_name, u.roll_no,
+                   r.club_event_id, ce.title as event_title, c.name as club_name,
+                   c.slug as club_slug, c.logo_url as club_logo_url
             FROM reservations r
             JOIN users u ON u.id = r.student_id
+            LEFT JOIN club_events ce ON ce.id = r.club_event_id
+            LEFT JOIN clubs c ON c.id = ce.club_id
             WHERE r.pc_id = $1 AND r.status = 'HELD'
             ORDER BY r.created_at DESC
             LIMIT 1
         """, pc["id"])
         if res:
-            resp.reserved_student_name = res["student_name"]
-            resp.reserved_roll_no = res["roll_no"]
-            resp.grace_deadline = res["grace_deadline"]
-            if res["grace_deadline"]:
-                diff = (res["grace_deadline"] - now).total_seconds()
-                resp.remaining_grace_seconds = max(0, int(diff))
-            resp.message = f"🔒 Workstation Reserved for {res['student_name']} ({res['roll_no']})"
+            if res["club_event_id"]:
+                resp.is_club_event = True
+                resp.club_name = res["club_name"]
+                resp.club_slug = res["club_slug"]
+                resp.club_logo_url = res["club_logo_url"]
+                resp.event_title = res["event_title"]
+                resp.event_id = res["club_event_id"]
+                resp.message = f"⚡ {res['club_name']}: {res['event_title']}"
+            else:
+                resp.reserved_student_name = res["student_name"]
+                resp.reserved_roll_no = res["roll_no"]
+                resp.grace_deadline = res["grace_deadline"]
+                if res["grace_deadline"]:
+                    diff = (res["grace_deadline"] - now).total_seconds()
+                    resp.remaining_grace_seconds = max(0, int(diff))
+                resp.message = f"🔒 Workstation Reserved for {res['student_name']} ({res['roll_no']})"
         else:
             resp.state = "AVAILABLE"
             resp.message = "🟢 Workstation Available (Walk-in Permitted)"

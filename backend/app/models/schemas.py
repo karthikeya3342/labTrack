@@ -43,6 +43,12 @@ class LockStateResponse(BaseModel):
     remaining_grace_seconds: Optional[int] = None
     active_session: Optional[Dict[str, Any]] = None
     latest_telemetry: Optional[Dict[str, Any]] = None
+    is_club_event: Optional[bool] = False
+    club_name: Optional[str] = None
+    club_slug: Optional[str] = None
+    club_logo_url: Optional[str] = None
+    event_title: Optional[str] = None
+    event_id: Optional[int] = None
     message: Optional[str] = None
 
 # --- Reservation Schemas ---

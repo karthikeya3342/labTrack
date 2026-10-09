@@ -74,6 +74,7 @@ async def workstation_checkin(req: AgentCheckinRequest):
     )
 
 @router.post("/close")
+@router.post("/session-close")
 async def workstation_close(req: AgentCloseRequest):
     target_session_id = req.session_id
 
@@ -90,6 +91,7 @@ async def workstation_close(req: AgentCloseRequest):
         else:
             # If no active session, ensure PC state is reset to AVAILABLE if stuck in OCCUPIED or HELD
             await execute("UPDATE pcs SET state = 'AVAILABLE' WHERE hostname = $1 AND state IN ('OCCUPIED', 'HELD')", req.hostname)
+            await execute("UPDATE reservations SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE pc_id = (SELECT id FROM pcs WHERE hostname = $1) AND status IN ('HELD', 'ACTIVE', 'PENDING')", req.hostname)
             return {"status": "closed", "hostname": req.hostname, "reason": req.reason}
 
     if not target_session_id:
@@ -97,6 +99,8 @@ async def workstation_close(req: AgentCloseRequest):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Must specify either session_id or hostname"
         )
+
+    sess_info = await fetch_one("SELECT pc_id FROM sessions WHERE id = $1", target_session_id)
 
     success = await fetch_val(
         "SELECT fn_close_session($1, $2);",
@@ -110,7 +114,21 @@ async def workstation_close(req: AgentCloseRequest):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Active session {target_session_id} not found"
         )
-    return {"status": "closed", "session_id": target_session_id, "reason": req.reason}
+
+    # Check and trigger TaskPool auto-promotion for newly freed PC
+    promotion = None
+    if sess_info:
+        pc = await fetch_one("SELECT id, lab_id FROM pcs WHERE id = $1", sess_info["pc_id"])
+        if pc:
+            from backend.app.api.scheduler import promote_next_taskpool_entry
+            promotion = await promote_next_taskpool_entry(pc["id"], pc["lab_id"])
+
+    return {
+        "status": "closed",
+        "session_id": target_session_id,
+        "reason": req.reason,
+        "promoted_waitlist_entry": promotion
+    }
 
 @router.post("/heartbeat")
 async def workstation_heartbeat(req: AgentHeartbeatRequest):

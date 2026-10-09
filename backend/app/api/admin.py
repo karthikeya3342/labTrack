@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, Dict, Any
+from datetime import datetime, timezone
 from pydantic import BaseModel
 from backend.app.core.security import get_current_user_token_payload
 from backend.app.core.database import fetch_all, fetch_one, execute, fetch_val
@@ -46,6 +47,7 @@ async def force_release_session(
     payload: dict = Depends(get_current_user_token_payload)
 ):
     verify_admin(payload)
+    sess_info = await fetch_one("SELECT pc_id FROM sessions WHERE id = $1", session_id)
     success = await fetch_val(
         "SELECT fn_close_session($1, $2);",
         session_id,
@@ -53,7 +55,15 @@ async def force_release_session(
     )
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found or already closed")
-    return {"status": "force_released", "session_id": session_id}
+
+    promotion = None
+    if sess_info:
+        pc = await fetch_one("SELECT id, lab_id FROM pcs WHERE id = $1", sess_info["pc_id"])
+        if pc:
+            from backend.app.api.scheduler import promote_next_taskpool_entry
+            promotion = await promote_next_taskpool_entry(pc["id"], pc["lab_id"])
+
+    return {"status": "force_released", "session_id": session_id, "promoted_waitlist_entry": promotion}
 
 @router.get("/licenses")
 async def get_license_tracker():
@@ -126,4 +136,129 @@ async def get_telemetry_summary():
         "summary": summary,
         "workstations": pc_metrics
     }
+
+class UserRoleUpdateRequest(BaseModel):
+    role: str  # 'faculty', 'student', 'club_lead', 'admin'
+
+class EventApprovalRequest(BaseModel):
+    admin_notes: Optional[str] = "Approved by Lab Administrator"
+
+@router.get("/users")
+async def list_users(payload: dict = Depends(get_current_user_token_payload)):
+    verify_admin(payload)
+    users = await fetch_all("""
+        SELECT id, roll_no, name, email, role, is_active, created_at
+        FROM users
+        ORDER BY id ASC;
+    """)
+    return users
+
+@router.post("/users/{user_id}/role")
+async def update_user_role(
+    user_id: int,
+    req: UserRoleUpdateRequest,
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    verify_admin(payload)
+    if req.role not in ("faculty", "student", "club_lead", "admin"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role specified")
+    
+    user = await fetch_one("SELECT id, name, roll_no FROM users WHERE id = $1", user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    await execute("UPDATE users SET role = $1 WHERE id = $2", req.role, user_id)
+    return {
+        "status": "success",
+        "user_id": user_id,
+        "name": user["name"],
+        "roll_no": user["roll_no"],
+        "new_role": req.role,
+        "message": f"User {user['name']} ({user['roll_no']}) updated to role '{req.role}'"
+    }
+
+@router.post("/clubs/events/{event_id}/approve")
+async def approve_club_event(
+    event_id: int,
+    req: EventApprovalRequest,
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    verify_admin(payload)
+    event = await fetch_one("""
+        SELECT e.id, e.title, e.club_id, e.lab_id, e.secondary_lab_id,
+               lower(e.time_range) as start_time, upper(e.time_range) as end_time,
+               e.status, c.name as club_name
+        FROM club_events e
+        JOIN clubs c ON c.id = e.club_id
+        WHERE e.id = $1;
+    """, event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    if event["status"] != "PENDING":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Event is already {event['status']}")
+
+    # Allocate all PCs in assigned lab(s)
+    lab_ids = [event["lab_id"]]
+    if event["secondary_lab_id"]:
+        lab_ids.append(event["secondary_lab_id"])
+
+    pcs = await fetch_all("""
+        SELECT id, hostname, lab_id FROM pcs
+        WHERE lab_id = ANY($1) AND state != 'MAINTENANCE';
+    """, lab_ids)
+
+    now = datetime.now(timezone.utc)
+    is_immediate = (now >= event["start_time"] and now <= event["end_time"])
+    initial_status = 'HELD' if is_immediate else 'PENDING'
+
+    # Create bulk reservations tagged with club_event_id
+    admin_id = int(payload["sub"])
+    for pc in pcs:
+        await execute("""
+            UPDATE reservations
+            SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP
+            WHERE pc_id = $1
+              AND status IN ('PENDING', 'HELD')
+              AND time_range && tstzrange($2, $3, '[)');
+        """, pc["id"], event["start_time"], event["end_time"])
+
+        await execute("""
+            INSERT INTO reservations (
+                student_id, pc_id, task_type, time_range, status, club_event_id, grace_deadline, notes
+            ) VALUES (
+                $1, $2, 'Coursework', tstzrange($3, $4, '[)'), $5, $6, $7, $8
+            );
+        """, admin_id, pc["id"], event["start_time"], event["end_time"],
+             initial_status, event_id, event["end_time"], f"Club Event: {event['club_name']} - {event['title']}")
+
+        if is_immediate:
+            await execute("UPDATE pcs SET state = 'HELD', updated_at = CURRENT_TIMESTAMP WHERE id = $1", pc["id"])
+
+    await execute("""
+        UPDATE club_events
+        SET status = 'APPROVED', admin_notes = $1
+        WHERE id = $2;
+    """, req.admin_notes, event_id)
+
+    return {
+        "status": "approved",
+        "event_id": event_id,
+        "title": event["title"],
+        "allocated_workstations_count": len(pcs),
+        "message": f"Event approved! {len(pcs)} workstations reserved for {event['club_name']}."
+    }
+
+@router.post("/clubs/events/{event_id}/reject")
+async def reject_club_event(
+    event_id: int,
+    req: EventApprovalRequest,
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    verify_admin(payload)
+    event = await fetch_one("SELECT id, status FROM club_events WHERE id = $1", event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    await execute("UPDATE club_events SET status = 'REJECTED', admin_notes = $1 WHERE id = $2", req.admin_notes, event_id)
+    return {"status": "rejected", "event_id": event_id, "reason": req.admin_notes}
+
 

@@ -25,10 +25,10 @@ BEGIN
         RAISE EXCEPTION 'Invalid reservation window: start time must precede end time';
     END IF;
 
-    -- Verify student role
-    PERFORM 1 FROM users WHERE id = p_student_id AND role = 'student';
+    -- Verify user role
+    PERFORM 1 FROM users WHERE id = p_student_id AND role IN ('student', 'faculty', 'club_lead', 'admin');
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'User % is not a registered student', p_student_id;
+        RAISE EXCEPTION 'User % is not authorized to reserve workstations', p_student_id;
     END IF;
 
     -- Verify PC exists and is not in maintenance
@@ -96,6 +96,7 @@ DECLARE
     v_res_student_id INT := NULL;
     v_res_student_name VARCHAR(100) := NULL;
     v_session_id INT;
+    v_club_event_id INT := NULL;
     v_sw_item TEXT;
     v_next_res_start TIMESTAMPTZ;
     v_walkin_end TIMESTAMPTZ;
@@ -125,20 +126,25 @@ BEGIN
 
     -- 3. PC state evaluation
     IF v_pc_state = 'HELD' THEN
-        -- Find the active/held reservation for this PC
-        SELECT r.id, r.student_id, u.name, r.software_required
-        INTO v_res_id, v_res_student_id, v_res_student_name, v_sw_array
+        -- Find the active/held reservation for this PC (including club events)
+        SELECT r.id, r.student_id, u.name, r.software_required, r.club_event_id
+        INTO v_res_id, v_res_student_id, v_res_student_name, v_sw_array, v_club_event_id
         FROM reservations r
         JOIN users u ON u.id = r.student_id
         WHERE r.pc_id = v_pc_id
           AND r.status = 'HELD'
-          AND v_now < r.grace_deadline
+          AND (r.grace_deadline IS NULL OR v_now < r.grace_deadline)
         ORDER BY r.created_at DESC
         LIMIT 1;
 
         IF v_res_id IS NOT NULL THEN
-            IF v_res_student_id <> v_user_id THEN
-                -- STRICT ACCESS ENFORCEMENT
+            IF v_club_event_id IS NOT NULL THEN
+                -- Club event reservation: Open checkin for any registered student!
+                UPDATE reservations
+                SET status = 'ACTIVE', student_id = v_user_id, updated_at = v_now
+                WHERE id = v_res_id;
+            ELSIF v_res_student_id <> v_user_id THEN
+                -- STRICT ACCESS ENFORCEMENT for individual reservations
                 RAISE EXCEPTION 'Access Denied: Workstation reserved for %. Please use an available machine.', v_res_student_name;
             ELSE
                 -- Reserved student matched
@@ -184,9 +190,9 @@ BEGIN
 
     -- 5. Create Session
     INSERT INTO sessions (
-        reservation_id, pc_id, user_id, start_time, cgroup_path, workspace_path, status
+        reservation_id, pc_id, user_id, start_time, cgroup_path, workspace_path, status, club_event_id
     ) VALUES (
-        v_res_id, v_pc_id, v_user_id, v_now, p_cgroup_path, p_workspace_path, 'ACTIVE'
+        v_res_id, v_pc_id, v_user_id, v_now, p_cgroup_path, p_workspace_path, 'ACTIVE', v_club_event_id
     ) RETURNING id INTO v_session_id;
 
     -- 6. Update Workstation state

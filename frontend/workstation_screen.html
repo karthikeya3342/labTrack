@@ -456,36 +456,61 @@
             </div>
 
             <div id="heldView" style="display: none;">
-                <h2 class="kiosk-title">Workstation Reserved</h2>
-                <p class="kiosk-sub">This PC is reserved. Only the assigned student can authenticate to unlock.</p>
+                <!-- 1. Individual Student Reservation View -->
+                <div id="individualHeldView">
+                    <h2 class="kiosk-title">Workstation Reserved</h2>
+                    <p class="kiosk-sub">This PC is reserved. Only the assigned student can authenticate to unlock.</p>
 
-                <div class="reserved-box">
-                    <div class="reserved-row">
-                        <span class="reserved-label">Assigned Student:</span>
-                        <span class="reserved-value" id="heldStudentName">Alice Johnson</span>
+                    <div class="reserved-box">
+                        <div class="reserved-row">
+                            <span class="reserved-label">Assigned Student:</span>
+                            <span class="reserved-value" id="heldStudentName">Alice Johnson</span>
+                        </div>
+                        <div class="reserved-row">
+                            <span class="reserved-label">Roll Number:</span>
+                            <span class="reserved-value" id="heldRollNo">STU001</span>
+                        </div>
+                        <div class="reserved-row">
+                            <span class="reserved-label">Grace Expiry:</span>
+                            <span class="reserved-value" id="heldGraceTime">10:45 AM</span>
+                        </div>
+                        <div class="countdown-timer" id="graceCountdown">14:59</div>
                     </div>
-                    <div class="reserved-row">
-                        <span class="reserved-label">Roll Number:</span>
-                        <span class="reserved-value" id="heldRollNo">STU001</span>
-                    </div>
-                    <div class="reserved-row">
-                        <span class="reserved-label">Grace Expiry:</span>
-                        <span class="reserved-value" id="heldGraceTime">10:45 AM</span>
-                    </div>
-                    <div class="countdown-timer" id="graceCountdown">14:59</div>
+
+                    <form onsubmit="handleUnlock(event)">
+                        <div class="form-group">
+                            <label>Reserved Student Roll Number</label>
+                            <input type="text" id="heldRollInput" placeholder="Confirm Roll Number" autocomplete="off" />
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="heldPwInput" placeholder="Enter password" />
+                        </div>
+                        <button type="submit" class="btn-unlock">🔓 Unlock Reserved Session</button>
+                    </form>
                 </div>
 
-                <form onsubmit="handleUnlock(event)">
-                    <div class="form-group">
-                        <label>Reserved Student Roll Number</label>
-                        <input type="text" id="heldRollInput" placeholder="Confirm Roll Number" required autocomplete="off" />
+                <!-- 2. Technical Club Event Reserved View -->
+                <div id="clubHeldView" style="display: none;">
+                    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.85rem;">
+                        <img id="clubLogoImg" src="/static/clubs/gdg.svg" alt="Club Logo" style="height: 76px; width: 76px; object-fit: contain; filter: drop-shadow(0 4px 14px rgba(56, 189, 248, 0.45));" />
                     </div>
-                    <div class="form-group">
-                        <label>Password</label>
-                        <input type="password" id="heldPwInput" placeholder="Enter password" required />
-                    </div>
-                    <button type="submit" class="btn-unlock">🔓 Unlock Reserved Session</button>
-                </form>
+                    <div style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; color: #38bdf8;" id="clubNameHeader">Google Developer Groups</div>
+                    <h2 class="kiosk-title" id="clubEventTitle" style="margin: 0.35rem 0 0.5rem 0; font-size: 1.55rem; color: #f8fafc;">Intro to Development</h2>
+                    <p class="kiosk-sub" style="margin-bottom: 1.25rem;">⚡ Lab workstation reserved for technical club workshop. <strong>Any registered student</strong> can log in to participate!</p>
+
+                    <form onsubmit="handleUnlock(event)">
+                        <div class="form-group">
+                            <label>Student Roll Number</label>
+                            <input type="text" id="clubRollInput" placeholder="e.g. STU001 or 21CS045" autocomplete="off" />
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="clubPwInput" placeholder="Enter password" />
+                        </div>
+                        <button type="submit" class="btn-unlock" style="background: linear-gradient(135deg, #10b981, #0284c7);">🚀 Join Club Session & Unlock</button>
+                    </form>
+                </div>
             </div>
 
             <div id="occupiedView" style="display: none;">
@@ -641,15 +666,28 @@
                 setWanStatus(false);
             } else if (data.state === 'HELD') {
                 document.getElementById('heldView').style.display = 'block';
-                stateBadge.innerText = "🔒 Workstation Reserved";
-                document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
-                document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
-                document.getElementById('heldRollInput').value = data.reserved_roll_no || '';
-                if (data.grace_deadline) {
-                    document.getElementById('heldGraceTime').innerText = new Date(data.grace_deadline).toLocaleTimeString();
-                }
-                remainingGraceSeconds = data.remaining_grace_seconds || 0;
                 setWanStatus(false);
+
+                if (data.is_club_event) {
+                    stateBadge.innerText = `⚡ ${data.club_name || 'CLUB'} EVENT`;
+                    stateBadge.className = 'state-banner banner-HELD';
+                    document.getElementById('individualHeldView').style.display = 'none';
+                    document.getElementById('clubHeldView').style.display = 'block';
+                    document.getElementById('clubLogoImg').src = data.club_logo_url || '/static/clubs/gdg.svg';
+                    document.getElementById('clubNameHeader').innerText = data.club_name || 'Technical Club';
+                    document.getElementById('clubEventTitle').innerText = data.event_title || 'Club Workshop';
+                } else {
+                    document.getElementById('individualHeldView').style.display = 'block';
+                    document.getElementById('clubHeldView').style.display = 'none';
+                    stateBadge.innerText = "🔒 Workstation Reserved";
+                    document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
+                    document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
+                    document.getElementById('heldRollInput').value = data.reserved_roll_no || '';
+                    if (data.grace_deadline) {
+                        document.getElementById('heldGraceTime').innerText = new Date(data.grace_deadline).toLocaleTimeString();
+                    }
+                    remainingGraceSeconds = data.remaining_grace_seconds || 0;
+                }
             } else if (data.state === 'OCCUPIED') {
                 document.getElementById('occupiedView').style.display = 'block';
                 stateBadge.innerText = "⚡ Session Active";
@@ -703,8 +741,13 @@
             let password = "";
 
             if (currentLockState.state === 'HELD') {
-                rollNo = document.getElementById('heldRollInput').value.trim();
-                password = document.getElementById('heldPwInput').value;
+                if (currentLockState.is_club_event) {
+                    rollNo = document.getElementById('clubRollInput').value.trim();
+                    password = document.getElementById('clubPwInput').value;
+                } else {
+                    rollNo = document.getElementById('heldRollInput').value.trim();
+                    password = document.getElementById('heldPwInput').value;
+                }
             } else {
                 rollNo = document.getElementById('walkinRoll').value.trim();
                 password = document.getElementById('walkinPw').value;

@@ -17,7 +17,7 @@ async def create_advance_booking(
 ):
     student_id = int(payload["sub"])
     role = payload.get("role", "student")
-    if role not in ("student", "admin", "faculty"):
+    if role not in ("student", "admin", "faculty", "club_lead"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students and faculty can book workstation reservations")
 
     # Proposal Section 6: Priority and Task-Based Allocation
