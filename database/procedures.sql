@@ -9,7 +9,10 @@ CREATE OR REPLACE FUNCTION fn_admit_reservation(
     p_start TIMESTAMPTZ,
     p_end TIMESTAMPTZ,
     p_task_type TEXT DEFAULT 'Practice',
-    p_software TEXT[] DEFAULT ARRAY[]::TEXT[]
+    p_software TEXT[] DEFAULT ARRAY[]::TEXT[],
+    p_priority_score INT DEFAULT 20,
+    p_allocation_basis TEXT DEFAULT NULL,
+    p_deadline TIMESTAMPTZ DEFAULT NULL
 ) RETURNS INT AS $$
 DECLARE
     v_res_id INT;
@@ -42,14 +45,18 @@ BEGIN
 
     -- Insert reservation (GiST constraint automatically prevents overlaps)
     INSERT INTO reservations (
-        student_id, pc_id, task_type, software_required, time_range, status, grace_deadline
+        student_id, pc_id, task_type, software_required, time_range, status, grace_deadline,
+        priority_score, allocation_basis, deadline
     ) VALUES (
         p_student_id, p_pc_id, p_task_type, p_software, v_time_range,
         CASE
             WHEN v_now >= (p_start - INTERVAL '10 minutes') AND v_now <= v_grace THEN 'HELD'
             ELSE 'PENDING'
         END,
-        v_grace
+        v_grace,
+        p_priority_score,
+        p_allocation_basis,
+        p_deadline
     ) RETURNING id INTO v_res_id;
 
     -- If the reservation starts now or very soon, flip PC state to HELD

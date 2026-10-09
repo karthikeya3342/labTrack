@@ -30,6 +30,7 @@ class PCResponse(BaseModel):
     last_heartbeat: Optional[datetime] = None
     active_reservation: Optional[Dict[str, Any]] = None
     active_session: Optional[Dict[str, Any]] = None
+    latest_telemetry: Optional[Dict[str, Any]] = None
 
 class LockStateResponse(BaseModel):
     hostname: str
@@ -41,6 +42,7 @@ class LockStateResponse(BaseModel):
     grace_deadline: Optional[datetime] = None
     remaining_grace_seconds: Optional[int] = None
     active_session: Optional[Dict[str, Any]] = None
+    latest_telemetry: Optional[Dict[str, Any]] = None
     message: Optional[str] = None
 
 # --- Reservation Schemas ---
@@ -51,6 +53,7 @@ class AdvanceBookingRequest(BaseModel):
     end_time: datetime
     task_type: str = "Practice"
     software_required: List[str] = []
+    deadline: Optional[datetime] = None
     notes: Optional[str] = None
 
 class WalkinBookingRequest(BaseModel):

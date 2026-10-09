@@ -6,6 +6,8 @@ from backend.app.models.schemas import AdvanceBookingRequest
 from backend.app.core.security import get_current_user_token_payload
 from backend.app.core.database import fetch_all, fetch_one, fetch_val, execute
 
+from backend.app.core.allocation_engine import allocate_workstation_for_request
+
 router = APIRouter(prefix="/reservations", tags=["Reservations"])
 
 @router.post("/advance")
@@ -14,54 +16,47 @@ async def create_advance_booking(
     payload: dict = Depends(get_current_user_token_payload)
 ):
     student_id = int(payload["sub"])
-    role = payload.get("role")
-    if role not in ("student", "admin"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students can book workstation reservations")
+    role = payload.get("role", "student")
+    if role not in ("student", "admin", "faculty"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students and faculty can book workstation reservations")
 
-    target_pc_id = req.pc_id
+    # Proposal Section 6: Priority and Task-Based Allocation
+    alloc = await allocate_workstation_for_request(
+        student_id=student_id,
+        role=role,
+        task_type=req.task_type,
+        software_required=req.software_required,
+        start_time=req.start_time,
+        end_time=req.end_time,
+        target_pc_id=req.pc_id,
+        requested_lab_id=req.lab_id,
+        deadline=req.deadline
+    )
 
-    # If no specific PC selected, auto-allocate an available PC in the target lab
-    if not target_pc_id and req.lab_id:
-        req_gpu = "PyTorch GPU" in req.software_required
-        candidate_pcs = await fetch_all("""
-            SELECT p.id, p.hostname
-            FROM pcs p
-            JOIN labs l ON l.id = p.lab_id
-            WHERE p.lab_id = $1
-              AND p.state != 'MAINTENANCE'
-              AND ($2 = FALSE OR l.has_gpu = TRUE)
-              AND NOT EXISTS (
-                  SELECT 1 FROM reservations r
-                  WHERE r.pc_id = p.id
-                    AND r.status IN ('PENDING', 'HELD', 'ACTIVE')
-                    AND r.time_range && tstzrange($3, $4, '[)')
-              )
-            ORDER BY p.hostname ASC
-            LIMIT 1
-        """, req.lab_id, req_gpu, req.start_time, req.end_time)
-
-        if not candidate_pcs:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No available workstation matching requirements in selected lab for this time slot"
-            )
-        target_pc_id = candidate_pcs[0]["id"]
-
-    if not target_pc_id:
+    if not alloc["success"]:
+        err_type = alloc.get("error_type", "CONFLICT")
+        status_code = status.HTTP_409_CONFLICT if "FULL" in err_type or "CONFLICT" in err_type or "DENIED" in err_type else status.HTTP_400_BAD_REQUEST
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Must specify either pc_id or lab_id"
+            status_code=status_code,
+            detail=alloc["message"]
         )
+
+    target_pc_id = alloc["pc_id"]
+    priority_score = alloc["priority_score"]
+    allocation_basis = alloc["allocation_basis"]
 
     try:
         res_id = await fetch_val(
-            "SELECT fn_admit_reservation($1, $2, $3, $4, $5, $6);",
+            "SELECT fn_admit_reservation($1, $2, $3, $4, $5, $6, $7, $8, $9);",
             student_id,
             target_pc_id,
             req.start_time,
             req.end_time,
             req.task_type,
-            req.software_required
+            req.software_required,
+            priority_score,
+            allocation_basis,
+            req.deadline
         )
     except (asyncpg.exceptions.IntegrityConstraintViolationError, asyncpg.exceptions.UniqueViolationError):
         raise HTTPException(
@@ -74,19 +69,28 @@ async def create_advance_booking(
             detail=str(e)
         )
 
-    # Fetch confirmed booking details
+    # Fetch confirmed booking details with priority and allocation metadata
     booking = await fetch_one("""
         SELECT r.id, r.pc_id, p.hostname, l.name as lab_name,
                lower(r.time_range) as start_time,
                upper(r.time_range) as end_time,
-               r.status, r.task_type, r.software_required, r.grace_deadline
+               r.status, r.task_type, r.software_required, r.grace_deadline,
+               r.priority_score, r.allocation_basis, r.deadline
         FROM reservations r
         JOIN pcs p ON p.id = r.pc_id
         JOIN labs l ON l.id = p.lab_id
         WHERE r.id = $1
     """, res_id)
 
-    return {"status": "success", "reservation": booking}
+    return {
+        "status": "success",
+        "reservation": booking,
+        "allocation": {
+            "priority_score": priority_score,
+            "allocation_basis": allocation_basis,
+            "overflow_applied": alloc.get("overflow_applied", False)
+        }
+    }
 
 @router.get("/my")
 async def get_my_reservations(payload: dict = Depends(get_current_user_token_payload)):
@@ -96,6 +100,7 @@ async def get_my_reservations(payload: dict = Depends(get_current_user_token_pay
                lower(r.time_range) as start_time,
                upper(r.time_range) as end_time,
                r.status, r.task_type, r.software_required, r.grace_deadline,
+               r.priority_score, r.allocation_basis, r.deadline,
                r.created_at
         FROM reservations r
         JOIN pcs p ON p.id = r.pc_id

@@ -33,13 +33,23 @@ async def get_workstations(lab_id: Optional[int] = None):
                r.id as held_reservation_id, u_res.name as held_student_name, u_res.roll_no as held_roll_no,
                r.grace_deadline as held_grace_deadline,
                s.id as active_session_id, u_sess.name as active_student_name, u_sess.roll_no as active_roll_no,
-               s.start_time as session_start_time
+               s.start_time as session_start_time,
+               ts.cpu_percent as ts_cpu, ts.memory_percent as ts_mem,
+               ts.memory_rss_bytes as ts_rss, ts.process_count as ts_procs,
+               ts.load_average as ts_load, ts.recorded_at as ts_time
         FROM pcs p
         JOIN labs l ON l.id = p.lab_id
         LEFT JOIN reservations r ON r.pc_id = p.id AND r.status = 'HELD'
         LEFT JOIN users u_res ON u_res.id = r.student_id
         LEFT JOIN sessions s ON s.pc_id = p.id AND s.status = 'ACTIVE'
         LEFT JOIN users u_sess ON u_sess.id = s.user_id
+        LEFT JOIN LATERAL (
+            SELECT cpu_percent, memory_percent, memory_rss_bytes, process_count, load_average, recorded_at
+            FROM telemetry_samples
+            WHERE pc_id = p.id
+            ORDER BY recorded_at DESC
+            LIMIT 1
+        ) ts ON TRUE
     """
     params = []
     if lab_id is not None:
@@ -56,6 +66,18 @@ async def get_workstations(lab_id: Optional[int] = None):
                 specs = json.loads(specs)
             except Exception:
                 specs = {}
+
+        latest_tel = None
+        if row["ts_cpu"] is not None:
+            latest_tel = {
+                "cpu_percent": round(float(row["ts_cpu"]), 1),
+                "memory_percent": round(float(row["ts_mem"] or 0.0), 1),
+                "memory_rss_mb": round(float(row["ts_rss"] or 0) / (1024 * 1024), 1),
+                "process_count": int(row["ts_procs"] or 0),
+                "load_average": round(float(row["ts_load"] or 0.0), 2),
+                "recorded_at": row["ts_time"].isoformat() if row["ts_time"] else None
+            }
+
         results.append({
             "id": row["id"],
             "hostname": row["hostname"],
@@ -67,6 +89,7 @@ async def get_workstations(lab_id: Optional[int] = None):
             "specifications": specs,
             "last_heartbeat": row["last_heartbeat"],
             "maintenance_reason": row["maintenance_reason"],
+            "latest_telemetry": latest_tel,
             "held_info": {
                 "reservation_id": row["held_reservation_id"],
                 "student_name": row["held_student_name"],
@@ -157,5 +180,23 @@ async def get_pc_lock_state(hostname: str):
 
     elif state == "MAINTENANCE":
         resp.message = "Workstation Under Maintenance"
+
+    # Fetch latest telemetry for this PC
+    latest_ts = await fetch_one("""
+        SELECT cpu_percent, memory_percent, memory_rss_bytes, process_count, load_average, recorded_at
+        FROM telemetry_samples
+        WHERE pc_id = $1
+        ORDER BY recorded_at DESC
+        LIMIT 1
+    """, pc["id"])
+    if latest_ts:
+        resp.latest_telemetry = {
+            "cpu_percent": round(float(latest_ts["cpu_percent"]), 1),
+            "memory_percent": round(float(latest_ts["memory_percent"] or 0.0), 1),
+            "memory_rss_mb": round(float(latest_ts["memory_rss_bytes"] or 0) / (1024 * 1024), 1),
+            "process_count": int(latest_ts["process_count"] or 0),
+            "load_average": round(float(latest_ts["load_average"] or 0.0), 2),
+            "recorded_at": latest_ts["recorded_at"].isoformat() if latest_ts["recorded_at"] else None
+        }
 
     return resp

@@ -81,3 +81,49 @@ async def update_active_policy(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid policy type")
     CURRENT_POLICY["active_policy"] = req.policy
     return CURRENT_POLICY
+
+@router.get("/telemetry-summary")
+async def get_telemetry_summary():
+    """
+    Returns real-time aggregated CPU and RAM utilization metrics across all labs
+    for administrative monitoring and anomaly detection.
+    """
+    summary = await fetch_one("""
+        WITH latest_samples AS (
+            SELECT DISTINCT ON (pc_id)
+                   pc_id, cpu_percent, memory_percent, memory_rss_bytes, load_average, recorded_at
+            FROM telemetry_samples
+            WHERE recorded_at >= CURRENT_TIMESTAMP - INTERVAL '1 hour'
+            ORDER BY pc_id, recorded_at DESC
+        )
+        SELECT
+            COUNT(ls.pc_id) as reporting_pcs,
+            COALESCE(ROUND(AVG(ls.cpu_percent)::numeric, 1), 0.0) as avg_cpu_percent,
+            COALESCE(ROUND(AVG(ls.memory_percent)::numeric, 1), 0.0) as avg_memory_percent,
+            COALESCE(ROUND(SUM(ls.memory_rss_bytes / 1048576.0)::numeric, 1), 0.0) as total_ram_used_mb,
+            COUNT(ls.pc_id) FILTER (WHERE ls.cpu_percent >= 80.0 OR ls.memory_percent >= 85.0) as high_load_pcs
+        FROM latest_samples ls;
+    """)
+
+    pc_metrics = await fetch_all("""
+        SELECT p.id, p.hostname, p.state, l.name as lab_name,
+               ts.cpu_percent, ts.memory_percent,
+               ROUND((ts.memory_rss_bytes / 1048576.0)::numeric, 1) as memory_rss_mb,
+               ts.load_average, ts.process_count, ts.recorded_at
+        FROM pcs p
+        JOIN labs l ON l.id = p.lab_id
+        LEFT JOIN LATERAL (
+            SELECT cpu_percent, memory_percent, memory_rss_bytes, load_average, process_count, recorded_at
+            FROM telemetry_samples
+            WHERE pc_id = p.id
+            ORDER BY recorded_at DESC
+            LIMIT 1
+        ) ts ON TRUE
+        ORDER BY p.hostname ASC;
+    """)
+
+    return {
+        "summary": summary,
+        "workstations": pc_metrics
+    }
+

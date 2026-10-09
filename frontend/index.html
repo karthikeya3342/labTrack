@@ -201,6 +201,14 @@
                         </div>
                     </div>
 
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label>Submission Deadline (Optional - Triggers Section 6 Dynamic Aging Priority)</label>
+                        <input type="datetime-local" id="bookDeadline" />
+                        <div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 3px;">
+                            💡 Proposal Section 6: Priority increases sharply as submission deadline approaches to prevent starvation.
+                        </div>
+                    </div>
+
                     <div class="form-group" style="margin-bottom: 1.5rem;">
                         <label>Software & Hardware Requirements</label>
                         <div class="checkbox-group">
@@ -232,7 +240,7 @@
                                 <th>Workstation</th>
                                 <th>Lab</th>
                                 <th>Time Window</th>
-                                <th>Task Type</th>
+                                <th>Task & Priority</th>
                                 <th>Software</th>
                                 <th>Status</th>
                                 <th>Grace Deadline</th>
@@ -258,9 +266,41 @@
                 </div>
             </div>
 
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Live Lab Telemetry & Fleet Utilization Monitor</div>
+                        <div class="subtitle">Real-time /proc telemetry aggregated across all 45 physical workstations</div>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadAdminTelemetry()">🔄 Refresh Metrics</button>
+                </div>
+                <div class="metric-cards" style="margin-top: 0.5rem;">
+                    <div class="metric-card">
+                        <label>Fleet Avg CPU Utilization</label>
+                        <div class="metric-val" id="adminAvgCpu">0.0%</div>
+                        <div class="subtitle">Real-time CPU compute load</div>
+                    </div>
+                    <div class="metric-card">
+                        <label>Fleet Avg RAM Load</label>
+                        <div class="metric-val" id="adminAvgMem">0.0%</div>
+                        <div class="subtitle">Resident Set Size (RSS) %</div>
+                    </div>
+                    <div class="metric-card">
+                        <label>Active Workstations</label>
+                        <div class="metric-val" id="adminActivePcs">0</div>
+                        <div class="subtitle">Currently Occupied</div>
+                    </div>
+                    <div class="metric-card">
+                        <label>High-Load Alerts</label>
+                        <div class="metric-val" id="adminHighLoadPcs" style="color: #ef4444;">0</div>
+                        <div class="subtitle">CPU ≥ 80% or RAM ≥ 85%</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Workstation Maintenance & Force-Release Control</div>
+                    <div class="card-title">Workstation Telemetry & Maintenance Control</div>
                 </div>
                 <div class="table-responsive">
                     <table>
@@ -269,6 +309,8 @@
                                 <th>Hostname</th>
                                 <th>Lab</th>
                                 <th>Current State</th>
+                                <th>Live CPU %</th>
+                                <th>Live RAM Load</th>
                                 <th>Active Session</th>
                                 <th>Actions</th>
                             </tr>
@@ -419,7 +461,7 @@
             document.getElementById(tabId).classList.add('active');
 
             if (tabId === 'myReservationsTab') loadMyReservations();
-            if (tabId === 'adminTab') { loadLicenses(); loadAdminPcs(); }
+            if (tabId === 'adminTab') { loadLicenses(); loadAdminPcs(); loadAdminTelemetry(); }
         }
 
         async function quickLogin(rollNo, password) {
@@ -547,6 +589,39 @@
                     extraInfo = `<div>⚠️ ${pc.maintenance_reason || 'Diagnostics'}</div>`;
                 }
 
+                let telemetrySection = "";
+                if (pc.latest_telemetry) {
+                    const cpu = pc.latest_telemetry.cpu_percent;
+                    const mem = pc.latest_telemetry.memory_percent;
+                    const rssMb = pc.latest_telemetry.memory_rss_mb;
+                    const cpuColor = cpu > 80 ? '#ef4444' : (cpu > 50 ? '#f59e0b' : '#10b981');
+                    const memColor = mem > 85 ? '#ef4444' : (mem > 60 ? '#f59e0b' : '#3b82f6');
+                    telemetrySection = `
+                        <div class="pc-telemetry-live" style="margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="color: var(--text-muted);">⚡ CPU Utilization</span>
+                                <span style="font-weight: 600; color: ${cpuColor};">${cpu}%</span>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; overflow: hidden; margin-bottom: 6px;">
+                                <div style="background: ${cpuColor}; width: ${Math.min(100, Math.max(2, cpu))}%; height: 100%; border-radius: 4px;"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="color: var(--text-muted);">🧠 RAM RSS Load</span>
+                                <span style="font-weight: 600; color: ${memColor};">${rssMb} MB (${mem}%)</span>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; overflow: hidden;">
+                                <div style="background: ${memColor}; width: ${Math.min(100, Math.max(2, mem))}%; height: 100%; border-radius: 4px;"></div>
+                            </div>
+                        </div>
+                    `;
+                } else if (pc.state === 'AVAILABLE') {
+                    telemetrySection = `
+                        <div style="margin-top: 0.6rem; padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05); font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 5px;">
+                            <span style="color: #10b981;">●</span> Workstation Idle (0% Workload)
+                        </div>
+                    `;
+                }
+
                 return `
                     <div class="pc-card state-${pc.state}">
                         <div class="pc-header">
@@ -562,6 +637,7 @@
                             <div>GPU: ${pc.specifications.gpu || 'Integrated'}</div>
                             <div>RAM: ${pc.specifications.ram_gb || 32} GB</div>
                         </div>
+                        ${telemetrySection}
                     </div>
                 `;
             }).join('');
@@ -595,6 +671,8 @@
             const endTime = new Date(document.getElementById('bookEndTime').value).toISOString();
 
             const swReq = Array.from(document.querySelectorAll('input[name="swReq"]:checked')).map(c => c.value);
+            const deadlineVal = document.getElementById('bookDeadline').value;
+            const deadline = deadlineVal ? new Date(deadlineVal).toISOString() : null;
 
             try {
                 const res = await fetch('/api/reservations/advance', {
@@ -608,13 +686,28 @@
                         task_type: taskType,
                         start_time: startTime,
                         end_time: endTime,
-                        software_required: swReq
+                        software_required: swReq,
+                        deadline: deadline
                     })
                 });
 
                 const data = await res.json();
                 if (res.ok) {
-                    msg.innerHTML = `<span style="color: #34d399;">✅ Reservation confirmed! Workstation <strong>${data.reservation.hostname}</strong> has been allocated in ${data.reservation.lab_name}. Status: <strong>${data.reservation.status}</strong></span>`;
+                    const alloc = data.allocation || {};
+                    let overflowBadge = alloc.overflow_applied ? `<span style="background: #f59e0b; color: #000; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-left: 6px;">Overflow Applied</span>` : '';
+                    msg.innerHTML = `
+                        <div style="background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; border-radius: 8px; padding: 0.8rem; margin-top: 0.5rem;">
+                            <div style="color: #34d399; font-weight: 600; font-size: 0.95rem;">
+                                ✅ Reservation Confirmed: <strong>${data.reservation.hostname}</strong> (${data.reservation.lab_name}) ${overflowBadge}
+                            </div>
+                            <div style="font-size: 0.82rem; color: #e2e8f0; margin-top: 4px;">
+                                🎯 <strong>Priority Score:</strong> ${alloc.priority_score || 'Standard'} | <strong>Status:</strong> ${data.reservation.status}
+                            </div>
+                            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 3px;">
+                                📋 <strong>Allocation Basis:</strong> ${alloc.allocation_basis || 'Automated Match'}
+                            </div>
+                        </div>
+                    `;
                     loadWorkstations();
                 } else {
                     msg.innerHTML = `<span style="color: #ef4444;">❌ Booking failed: ${data.detail}</span>`;
@@ -648,7 +741,10 @@
                         <td><strong>${r.hostname}</strong></td>
                         <td>${r.lab_name}</td>
                         <td>${new Date(r.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${new Date(r.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
-                        <td>${r.task_type}</td>
+                        <td>
+                            <div><strong>${r.task_type}</strong> <span style="font-size: 0.72rem; background: rgba(56, 189, 248, 0.2); color: #38bdf8; padding: 2px 5px; border-radius: 4px; font-weight: 600;">Score: ${r.priority_score || 20}</span></div>
+                            ${r.allocation_basis ? `<div style="font-size: 0.72rem; color: var(--text-muted); max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${r.allocation_basis}">ℹ️ ${r.allocation_basis}</div>` : ''}
+                        </td>
                         <td>${(r.software_required || []).join(', ') || 'Standard'}</td>
                         <td><span class="status-badge badge-${r.status}">${r.status}</span></td>
                         <td>${r.grace_deadline ? new Date(r.grace_deadline).toLocaleTimeString() : 'N/A'}</td>
@@ -704,20 +800,66 @@
 
         function loadAdminPcs() {
             const tbody = document.getElementById('adminPcsTbody');
-            tbody.innerHTML = allPcs.map(pc => `
-                <tr>
-                    <td><strong>${pc.hostname}</strong></td>
-                    <td>${pc.lab_name}</td>
-                    <td><span class="status-badge badge-${pc.state}">${pc.state}</span></td>
-                    <td>${pc.active_session ? `${pc.active_session.student_name} (#${pc.active_session.session_id})` : '-'}</td>
-                    <td>
-                        ${pc.state === 'OCCUPIED' && pc.active_session ? `<button class="btn btn-outline btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.4rem;" onclick="forceReleaseSession(${pc.active_session.session_id})">Force Release</button>` : ''}
-                        <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="toggleMaintenance('${pc.hostname}', ${pc.state !== 'MAINTENANCE'})">
-                            ${pc.state === 'MAINTENANCE' ? 'Restore Online' : 'Set Maintenance'}
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            tbody.innerHTML = allPcs.map(pc => {
+                let cpuDisplay = '<span style="color: var(--text-muted); font-size: 0.8rem;">0.0% (Idle)</span>';
+                let memDisplay = '<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>';
+                if (pc.latest_telemetry) {
+                    const cpu = pc.latest_telemetry.cpu_percent;
+                    const mem = pc.latest_telemetry.memory_percent;
+                    const rss = pc.latest_telemetry.memory_rss_mb;
+                    const cpuColor = cpu > 80 ? '#ef4444' : (cpu > 50 ? '#f59e0b' : '#10b981');
+                    const memColor = mem > 85 ? '#ef4444' : (mem > 60 ? '#f59e0b' : '#3b82f6');
+                    cpuDisplay = `
+                        <div style="min-width: 90px;">
+                            <div style="font-weight: 600; color: ${cpuColor}; font-size: 0.82rem;">${cpu}%</div>
+                            <div style="background: rgba(255,255,255,0.1); border-radius: 3px; height: 4px; overflow: hidden; margin-top: 2px;">
+                                <div style="background: ${cpuColor}; width: ${Math.min(100, Math.max(3, cpu))}%; height: 100%;"></div>
+                            </div>
+                        </div>
+                    `;
+                    memDisplay = `
+                        <div style="min-width: 100px;">
+                            <div style="font-weight: 600; color: ${memColor}; font-size: 0.82rem;">${rss} MB (${mem}%)</div>
+                            <div style="background: rgba(255,255,255,0.1); border-radius: 3px; height: 4px; overflow: hidden; margin-top: 2px;">
+                                <div style="background: ${memColor}; width: ${Math.min(100, Math.max(3, mem))}%; height: 100%;"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+                return `
+                    <tr>
+                        <td><strong>${pc.hostname}</strong></td>
+                        <td>${pc.lab_name}</td>
+                        <td><span class="status-badge badge-${pc.state}">${pc.state}</span></td>
+                        <td>${cpuDisplay}</td>
+                        <td>${memDisplay}</td>
+                        <td>${pc.active_session ? `${pc.active_session.student_name} (#${pc.active_session.session_id})` : '-'}</td>
+                        <td>
+                            ${pc.state === 'OCCUPIED' && pc.active_session ? `<button class="btn btn-outline btn-danger" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; margin-right: 0.4rem;" onclick="forceReleaseSession(${pc.active_session.session_id})">Force Release</button>` : ''}
+                            <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" onclick="toggleMaintenance('${pc.hostname}', ${pc.state !== 'MAINTENANCE'})">
+                                ${pc.state === 'MAINTENANCE' ? 'Restore Online' : 'Set Maintenance'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadAdminTelemetry() {
+            try {
+                const res = await fetch('/api/admin/telemetry-summary');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.summary) {
+                        document.getElementById('adminAvgCpu').innerText = `${data.summary.avg_cpu_percent}%`;
+                        document.getElementById('adminAvgMem').innerText = `${data.summary.avg_memory_percent}%`;
+                        document.getElementById('adminActivePcs').innerText = data.summary.reporting_pcs || 0;
+                        document.getElementById('adminHighLoadPcs').innerText = data.summary.high_load_pcs || 0;
+                    }
+                }
+            } catch(e) {
+                console.error("Telemetry summary fetch failed:", e);
+            }
         }
 
         async function forceReleaseSession(sessionId) {

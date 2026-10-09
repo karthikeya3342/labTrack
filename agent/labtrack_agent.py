@@ -42,6 +42,10 @@ CAPTIVE_PORTAL_URL = os.getenv("CAPTIVE_PORTAL_URL", "https://10.10.10.2:8090/ht
 CGROUP_ROOT = "/sys/fs/cgroup/labtrack"
 SANDBOX_BASE = "/tmp/labtrack"
 
+# Inactivity / Idle Timeout Configuration (Proposal Section 6 & OS Spec: Flow A step 7, Flow B, O9)
+IDLE_TIMEOUT_SECONDS = int(os.getenv("LABTRACK_IDLE_TIMEOUT_SECONDS", str(30 * 60)))  # 30 minutes default
+IDLE_WARN_SECONDS = int(os.getenv("LABTRACK_IDLE_WARN_SECONDS", str(25 * 60)))        # 25 minutes default
+
 # Blacklisted process signatures (miners, torrents, unauthorized games)
 BLACKLIST_PROCESS_NAMES = {
     "xmrig", "minerd", "cpuminer", "ethminer", "stratum",
@@ -135,6 +139,7 @@ class WorkstationAgent:
         self.active_cgroup_path: Optional[str] = None
         self.active_workspace_path: Optional[str] = None
         self.last_known_state: str = "AVAILABLE"
+        self._idle_warned: bool = False
 
         AgentLocalHandler.agent_ref = self
         self._start_local_server()
@@ -634,7 +639,131 @@ Categories=Utility;
         logger.info("Session teardown and security wipe finalized.")
 
     # =========================================================================
-    # 7. MAIN AGENT DAEMON LOOP
+    # 7. INACTIVITY & IDLE TIMEOUT WATCHDOG (Flow A step 7, Flow B, OS Spec O9)
+    # =========================================================================
+    def get_inactivity_seconds(self) -> float:
+        """
+        Calculates user inactivity seconds using:
+        1. Hardware Input Devices (/dev/input/event* device mtimes)
+        2. X11 XScreenSaver Query (libXss.so.1 via ctypes)
+        """
+        now = time.time()
+        idle_estimates = []
+
+        # 1. Hardware Input Devices (/dev/input/event*)
+        try:
+            import glob
+            dev_files = glob.glob("/dev/input/event*") + ["/dev/input/mice", "/dev/input/mouse0"]
+            mtimes = [os.stat(f).st_mtime for f in dev_files if os.path.exists(f)]
+            if mtimes:
+                idle_estimates.append(max(0.0, now - max(mtimes)))
+        except Exception:
+            pass
+
+        # 2. X11 XScreenSaver Query
+        user = self.get_active_gui_user()
+        env = self.get_gui_env(user)
+        try:
+            import ctypes
+            class XScreenSaverInfo(ctypes.Structure):
+                _fields_ = [
+                    ('window', ctypes.c_ulong),
+                    ('state', ctypes.c_int),
+                    ('kind', ctypes.c_int),
+                    ('til_or_since', ctypes.c_ulong),
+                    ('idle', ctypes.c_ulong),
+                    ('eventMask', ctypes.c_ulong)
+                ]
+            xlib = ctypes.cdll.LoadLibrary('libX11.so.6')
+            xss = ctypes.cdll.LoadLibrary('libXss.so.1')
+            disp_str = env.get("DISPLAY", ":0").encode('utf-8')
+            dpy = xlib.XOpenDisplay(disp_str)
+            if dpy:
+                root = xlib.XDefaultRootWindow(dpy)
+                info = XScreenSaverInfo()
+                xss.XScreenSaverQueryInfo(dpy, root, ctypes.byref(info))
+                xlib.XCloseDisplay(dpy)
+                idle_estimates.append(max(0.0, info.idle / 1000.0))
+        except Exception:
+            pass
+
+        if not idle_estimates:
+            return 0.0
+
+        return min(idle_estimates)
+
+    def check_inactivity_and_enforce_timeout(self):
+        """
+        Monitors desktop activity. If student leaves workstation unattended for 30 minutes:
+        - Sends visual warning at 25 minutes
+        - At 30 minutes: auto-closes session with server, wipes workspace sandbox, and relocks screen into kiosk mode.
+        """
+        if not self.active_session_id:
+            self._idle_warned = False
+            return
+
+        idle_sec = self.get_inactivity_seconds()
+
+        # Safeguard: If student's background jobs are actively utilizing CPU > 20%, do not kill active compute
+        proc_telemetry = self.collect_proc_telemetry()
+        if proc_telemetry.get("cpu_percent", 0.0) >= 20.0:
+            if self._idle_warned:
+                self._idle_warned = False
+            return
+
+        # 1. Warning Threshold (e.g. 25 minutes)
+        if idle_sec >= IDLE_WARN_SECONDS and not self._idle_warned:
+            self._idle_warned = True
+            mins_left = max(1, int((IDLE_TIMEOUT_SECONDS - idle_sec) / 60))
+            logger.warning(f"⚠️ User idle for {int(idle_sec / 60)} minutes. Workstation will auto-relock in {mins_left} minutes.")
+            user = self.get_active_gui_user()
+            env = self.get_gui_env(user)
+            try:
+                subprocess.run(
+                    ["notify-send", "-u", "critical", "⚠️ LabTrack Inactivity Warning",
+                     f"No user activity detected for {int(idle_sec / 60)} minutes.\nWorkstation will automatically relock and end session in {mins_left} minutes."],
+                    env=env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
+
+        # Reset warning flag if user returns and types/moves mouse
+        elif idle_sec < IDLE_WARN_SECONDS and self._idle_warned:
+            logger.info("User activity detected. Resetting inactivity warning.")
+            self._idle_warned = False
+
+        # 2. Timeout Threshold (e.g. 30 minutes)
+        if idle_sec >= IDLE_TIMEOUT_SECONDS:
+            logger.warning(
+                f"🔒 Inactivity timeout reached ({int(idle_sec / 60)} minutes idle). "
+                f"Auto-closing session #{self.active_session_id} and relocking workstation..."
+            )
+            try:
+                requests.post(
+                    f"{self.server_url}/api/agent/close",
+                    json={
+                        "hostname": self.hostname,
+                        "session_id": self.active_session_id,
+                        "reason": f"Session auto-closed due to {int(idle_sec / 60)} min user inactivity"
+                    },
+                    timeout=3.0
+                )
+            except Exception as e:
+                logger.error(f"Error notifying server of inactivity close: {e}")
+
+            # Teardown workspace and cgroups
+            self.teardown_session()
+            self._idle_warned = False
+            self.last_known_state = "AVAILABLE"
+
+            # Relock into fullscreen kiosk screen
+            self.lock_workstation_gui()
+            logger.info("Workstation successfully relocked and reset to AVAILABLE after idle timeout.")
+
+    # =========================================================================
+    # 8. MAIN AGENT DAEMON LOOP
     # =========================================================================
     def run(self):
         logger.info(f"LabTrack Agent daemon active on {self.hostname}. Starting monitoring cycle.")
@@ -655,6 +784,9 @@ Categories=Utility;
                 # 3. Heartbeat & Telemetry every 3 seconds
                 self.send_heartbeat()
                 self.send_telemetry()
+
+                # 4. Inactivity & Idle Timeout Watchdog (30-min auto-relock)
+                self.check_inactivity_and_enforce_timeout()
 
                 time.sleep(3.0)
                 cycle += 1
