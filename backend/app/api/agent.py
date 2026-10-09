@@ -89,10 +89,9 @@ async def workstation_close(req: AgentCloseRequest):
         if sess:
             target_session_id = sess["id"]
         else:
-            # If no active session, ensure PC state is reset to AVAILABLE if stuck in OCCUPIED or HELD
-            await execute("UPDATE pcs SET state = 'AVAILABLE' WHERE hostname = $1 AND state IN ('OCCUPIED', 'HELD')", req.hostname)
-            await execute("UPDATE reservations SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP WHERE pc_id = (SELECT id FROM pcs WHERE hostname = $1) AND status IN ('HELD', 'ACTIVE', 'PENDING')", req.hostname)
-            return {"status": "closed", "hostname": req.hostname, "reason": req.reason}
+            # If no active session, only clear stuck OCCUPIED state if any
+            await execute("UPDATE pcs SET state = 'AVAILABLE' WHERE hostname = $1 AND state = 'OCCUPIED'", req.hostname)
+            return {"status": "no_active_session", "hostname": req.hostname, "reason": req.reason}
 
     if not target_session_id:
         raise HTTPException(

@@ -31,18 +31,23 @@ def test_inactivity_timeout_triggers_auto_close_and_relock():
                 mock_post.return_value.ok = True
                 with patch.object(agent, "lock_workstation_gui") as mock_lock:
                     with patch.object(agent, "wipe_workspace_sandbox") as mock_wipe:
-                        agent.check_inactivity_and_enforce_timeout()
+                        with patch("subprocess.run") as mock_subproc:
+                            agent.check_inactivity_and_enforce_timeout()
 
-                        # 1. Verify close request sent with inactivity reason
-                        close_calls = [c for c in mock_post.call_args_list if "/api/agent/close" in str(c)]
-                        assert len(close_calls) > 0, "Expected /api/agent/close to be called"
-                        call_kwargs = close_calls[0][1]
-                        assert "Session auto-closed due to 30 min user inactivity" in call_kwargs["json"]["reason"]
-                        assert call_kwargs["json"]["session_id"] == 999
+                            # 1. Verify close request sent with inactivity reason
+                            close_calls = [c for c in mock_post.call_args_list if "/api/agent/close" in str(c)]
+                            assert len(close_calls) > 0, "Expected /api/agent/close to be called"
+                            call_kwargs = close_calls[0][1]
+                            assert "Session auto-closed due to 30 min user inactivity" in call_kwargs["json"]["reason"]
+                            assert call_kwargs["json"]["session_id"] == 999
 
-                        # 2. Verify workspace wiped and screen locked
-                        mock_wipe.assert_called()
-                        mock_lock.assert_called()
+                            # 2. Verify workspace wiped and screen locked
+                            mock_wipe.assert_called()
+                            mock_lock.assert_called()
+
+                            # 3. Verify notification was dispatched via notify-send
+                            notify_calls = [c for c in mock_subproc.call_args_list if "notify-send" in str(c)]
+                            assert len(notify_calls) > 0, "Expected notify-send to be invoked"
 
                         # 3. Verify state reset to AVAILABLE
                         assert agent.active_session_id is None

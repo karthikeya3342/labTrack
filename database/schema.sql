@@ -169,3 +169,44 @@ CREATE TABLE audit_logs (
     details JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 13. Technical Coding Clubs Table
+CREATE TABLE IF NOT EXISTS clubs (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    slug VARCHAR(50) NOT NULL UNIQUE,
+    logo_url VARCHAR(255) DEFAULT '/static/clubs/default.png',
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Club Events Table
+CREATE TABLE IF NOT EXISTS club_events (
+    id SERIAL PRIMARY KEY,
+    club_id INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    lead_id INT REFERENCES users(id) ON DELETE SET NULL,
+    title VARCHAR(150) NOT NULL,
+    description TEXT,
+    lab_id INT NOT NULL REFERENCES labs(id) ON DELETE CASCADE,
+    secondary_lab_id INT REFERENCES labs(id) ON DELETE SET NULL,
+    time_range TSTZRANGE NOT NULL,
+    status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED')),
+    admin_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 15. Real-Time Dynamic TaskPool Priority Entries
+CREATE TABLE IF NOT EXISTS taskpool_entries (
+    id SERIAL PRIMARY KEY,
+    student_id INT REFERENCES users(id) ON DELETE CASCADE,
+    task_type VARCHAR(50) NOT NULL,
+    software_required TEXT[] DEFAULT ARRAY[]::TEXT[],
+    target_lab_id INT REFERENCES labs(id) ON DELETE SET NULL,
+    deadline TIMESTAMPTZ,
+    wait_start_time TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    current_priority NUMERIC(10,2) DEFAULT 20.00,
+    status VARCHAR(20) DEFAULT 'QUEUED' CHECK (status IN ('QUEUED', 'PROMOTED', 'EXPIRED', 'CANCELLED')),
+    assigned_pc_id INT REFERENCES pcs(id) ON DELETE SET NULL,
+    assigned_reservation_id INT REFERENCES reservations(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);

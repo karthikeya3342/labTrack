@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from backend.app.core.security import get_current_user_token_payload
 from backend.app.core.database import fetch_all, fetch_one, execute, fetch_val
+from backend.app.core.lifecycle import reap_expired_allocations
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
@@ -98,6 +99,7 @@ async def get_telemetry_summary():
     Returns real-time aggregated CPU and RAM utilization metrics across all labs
     for administrative monitoring and anomaly detection.
     """
+    await reap_expired_allocations()
     summary = await fetch_one("""
         WITH latest_samples AS (
             SELECT DISTINCT ON (pc_id)
@@ -107,6 +109,9 @@ async def get_telemetry_summary():
             ORDER BY pc_id, recorded_at DESC
         )
         SELECT
+            (SELECT COUNT(*) FROM pcs WHERE state = 'OCCUPIED') as occupied_pcs,
+            (SELECT COUNT(*) FROM pcs WHERE state = 'AVAILABLE') as available_pcs,
+            (SELECT COUNT(*) FROM pcs WHERE state = 'HELD') as held_pcs,
             COUNT(ls.pc_id) as reporting_pcs,
             COALESCE(ROUND(AVG(ls.cpu_percent)::numeric, 1), 0.0) as avg_cpu_percent,
             COALESCE(ROUND(AVG(ls.memory_percent)::numeric, 1), 0.0) as avg_memory_percent,
@@ -178,6 +183,7 @@ async def update_user_role(
     }
 
 @router.post("/clubs/events/{event_id}/approve")
+@router.post("/club-events/{event_id}/approve")
 async def approve_club_event(
     event_id: int,
     req: EventApprovalRequest,
@@ -208,10 +214,10 @@ async def approve_club_event(
     """, lab_ids)
 
     now = datetime.now(timezone.utc)
-    is_immediate = (now >= event["start_time"] and now <= event["end_time"])
-    initial_status = 'HELD' if is_immediate else 'PENDING'
+    # Only flip to HELD if within 10 minutes of start time; future events stay PENDING and workstations stay AVAILABLE
+    is_immediate = (now >= event["start_time"] - timedelta(minutes=10) and now < event["end_time"])
+    initial_status = "HELD" if is_immediate else "PENDING"
 
-    # Create bulk reservations tagged with club_event_id
     admin_id = int(payload["sub"])
     for pc in pcs:
         await execute("""
@@ -226,13 +232,18 @@ async def approve_club_event(
             INSERT INTO reservations (
                 student_id, pc_id, task_type, time_range, status, club_event_id, grace_deadline, notes
             ) VALUES (
-                $1, $2, 'Coursework', tstzrange($3, $4, '[)'), $5, $6, $7, $8
+                NULL, $1, 'Practice', tstzrange($2, $3, '[)'), $4, $5, $6, $7
             );
-        """, admin_id, pc["id"], event["start_time"], event["end_time"],
+        """, pc["id"], event["start_time"], event["end_time"],
              initial_status, event_id, event["end_time"], f"Club Event: {event['club_name']} - {event['title']}")
 
         if is_immediate:
-            await execute("UPDATE pcs SET state = 'HELD', updated_at = CURRENT_TIMESTAMP WHERE id = $1", pc["id"])
+            # Set workstation to HELD unless an active student session is currently occupying it
+            await execute("""
+                UPDATE pcs
+                SET state = 'HELD', updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 AND state != 'OCCUPIED' AND state != 'MAINTENANCE';
+            """, pc["id"])
 
     await execute("""
         UPDATE club_events
@@ -260,5 +271,52 @@ async def reject_club_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     await execute("UPDATE club_events SET status = 'REJECTED', admin_notes = $1 WHERE id = $2", req.admin_notes, event_id)
     return {"status": "rejected", "event_id": event_id, "reason": req.admin_notes}
+
+@router.post("/system/release-all")
+async def release_all_system_holds(
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    """
+    Master Reset: Immediately releases all holds, closes active sessions,
+    marks all reservations and club events completed, and returns all
+    workstations to AVAILABLE normal walk-in kiosk mode.
+    """
+    verify_admin(payload)
+
+    # 1. Complete all active/pending/held reservations
+    await execute("""
+        UPDATE reservations
+        SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+        WHERE status IN ('PENDING', 'HELD', 'ACTIVE');
+    """)
+
+    # 2. Complete all approved/pending club events
+    await execute("""
+        UPDATE club_events
+        SET status = 'COMPLETED'
+        WHERE status IN ('PENDING', 'APPROVED');
+    """)
+
+    # 3. Close active sessions
+    await execute("""
+        UPDATE sessions
+        SET status = 'CLOSED', end_time = CURRENT_TIMESTAMP, close_reason = 'Admin Master Reset'
+        WHERE status = 'ACTIVE';
+    """)
+
+    # 4. Clean taskpool
+    await execute("DELETE FROM taskpool_entries;")
+
+    # 5. Restore all PCs to AVAILABLE (except MAINTENANCE)
+    await execute("""
+        UPDATE pcs
+        SET state = 'AVAILABLE', updated_at = CURRENT_TIMESTAMP
+        WHERE state != 'MAINTENANCE';
+    """)
+
+    return {
+        "status": "success",
+        "message": "All holds, reservations, and club events cleared. All workstations restored to AVAILABLE for walk-in kiosks."
+    }
 
 

@@ -9,6 +9,13 @@ from agent.labtrack_agent import WorkstationAgent
 @pytest.fixture(scope="module")
 def client():
     with TestClient(app) as test_client:
+        import asyncio
+        from backend.app.core.database import execute
+        try:
+            asyncio.run(execute("UPDATE reservations SET status = 'CANCELLED' WHERE pc_id = 1 AND status IN ('PENDING', 'HELD', 'ACTIVE')"))
+            asyncio.run(execute("UPDATE pcs SET state = 'AVAILABLE' WHERE id = 1"))
+        except Exception:
+            pass
         yield test_client
 
 def test_01_workstation_boots_available(client):

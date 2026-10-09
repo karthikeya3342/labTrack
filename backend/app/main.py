@@ -1,4 +1,5 @@
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse, PlainTextResponse
@@ -6,14 +7,36 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.core.config import settings
 from backend.app.core.database import init_db_pool, close_db_pool
+from backend.app.core.lifecycle import reap_expired_allocations
 from backend.app.api import auth, pcs, reservations, agent, admin, scheduler, clubs, faculty
+
+async def _background_lifecycle_worker():
+    while True:
+        try:
+            await reap_expired_allocations()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            pass
+        await asyncio.sleep(5)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize DB pool
     await init_db_pool()
+    # Initial sweep on startup
+    try:
+        await reap_expired_allocations()
+    except Exception:
+        pass
+    reaper_task = asyncio.create_task(_background_lifecycle_worker())
     yield
-    # Shutdown: Close DB pool
+    # Shutdown: Cancel background worker and close DB pool
+    reaper_task.cancel()
+    try:
+        await reaper_task
+    except asyncio.CancelledError:
+        pass
     await close_db_pool()
 
 app = FastAPI(

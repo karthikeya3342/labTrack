@@ -17,8 +17,13 @@ async def create_advance_booking(
 ):
     student_id = int(payload["sub"])
     role = payload.get("role", "student")
-    if role not in ("student", "admin", "faculty", "club_lead"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students and faculty can book workstation reservations")
+    if role == "faculty":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Faculty members cannot book individual workstations. Please use the Faculty Extra Labs portal (/api/faculty/reserve-extra-lab) to schedule cohort lab sessions."
+        )
+    if role not in ("student", "admin", "club_lead"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students can book individual workstation reservations.")
 
     # Proposal Section 6: Priority and Task-Based Allocation
     alloc = await allocate_workstation_for_request(
@@ -69,12 +74,16 @@ async def create_advance_booking(
             detail=str(e)
         )
 
-    # Fetch confirmed booking details with priority and allocation metadata
+    if req.notes:
+        await execute("UPDATE reservations SET notes = $1 WHERE id = $2;", req.notes, res_id)
+
+    # Fetch confirmed booking details with clean purpose and metadata
     booking = await fetch_one("""
         SELECT r.id, r.pc_id, p.hostname, l.name as lab_name,
                lower(r.time_range) as start_time,
                upper(r.time_range) as end_time,
                r.status, r.task_type, r.software_required, r.grace_deadline,
+               COALESCE(r.notes, r.task_type) as purpose,
                r.priority_score, r.allocation_basis, r.deadline
         FROM reservations r
         JOIN pcs p ON p.id = r.pc_id
@@ -94,18 +103,23 @@ async def create_advance_booking(
 
 @router.get("/my")
 async def get_my_reservations(payload: dict = Depends(get_current_user_token_payload)):
+    from backend.app.core.lifecycle import reap_expired_allocations
+    await reap_expired_allocations()
     user_id = int(payload["sub"])
+    role = payload.get("role", "student")
+    if role == "faculty":
+        return []
     reservations = await fetch_all("""
         SELECT r.id, r.pc_id, p.hostname, l.name as lab_name,
                lower(r.time_range) as start_time,
                upper(r.time_range) as end_time,
                r.status, r.task_type, r.software_required, r.grace_deadline,
-               r.priority_score, r.allocation_basis, r.deadline,
-               r.created_at
+               COALESCE(r.notes, r.task_type) as purpose,
+               r.notes, r.created_at
         FROM reservations r
         JOIN pcs p ON p.id = r.pc_id
         JOIN labs l ON l.id = p.lab_id
-        WHERE r.student_id = $1
+        WHERE r.student_id = $1 AND r.club_event_id IS NULL AND r.batch_name IS NULL
         ORDER BY r.created_at DESC
         LIMIT 50
     """, user_id)

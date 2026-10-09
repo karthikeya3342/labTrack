@@ -49,6 +49,11 @@ class LockStateResponse(BaseModel):
     club_logo_url: Optional[str] = None
     event_title: Optional[str] = None
     event_id: Optional[int] = None
+    is_faculty_lab: Optional[bool] = False
+    faculty_name: Optional[str] = None
+    course_name: Optional[str] = None
+    batch_name: Optional[str] = None
+    purpose: Optional[str] = None
     message: Optional[str] = None
 
 # --- Reservation Schemas ---

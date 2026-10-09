@@ -330,7 +330,7 @@ Categories=Utility;
             browser,
             f"--user-data-dir={dock_dir}",
             f"--app={floating_url}",
-            "--window-size=540,130",
+            "--window-size=580,120",
             "--window-position=500,30",
             "--no-first-run",
             "--no-default-browser-check",

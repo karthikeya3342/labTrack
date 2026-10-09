@@ -63,7 +63,9 @@ def test_section6_task_based_allocation_senior_project_to_lab2(client):
 def test_section6_task_based_allocation_gpu_to_lab3(client):
     """Proposal Section 6: PyTorch GPU allocates to AI & High-Performance Lab (Lab 3)."""
     token = get_auth_token(client, "STU003")
-    start = datetime.now(timezone.utc) + timedelta(days=2, hours=5)
+    import time
+    offset = 100 + (int(time.time() * 10) % 500)
+    start = datetime.now(timezone.utc) + timedelta(days=offset, hours=5)
     end = start + timedelta(hours=2)
 
     resp = client.post(

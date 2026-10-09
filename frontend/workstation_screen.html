@@ -4,424 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LabTrack Workstation Greeter & Lock Screen</title>
-    <style>
-        :root {
-            --bg-color: #090d16;
-            --panel-bg: rgba(22, 32, 50, 0.92);
-            --border: #28374e;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent: #38bdf8;
-            --color-avail: #10b981;
-            --color-held: #f59e0b;
-            --color-occupied: #6366f1;
-            --color-maint: #ef4444;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        
-        body {
-            background: radial-gradient(circle at 50% 20%, #172554, var(--bg-color) 70%);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            user-select: none;
-            overflow: hidden;
-        }
-
-        /* Top Status Bar */
-        .top-bar {
-            padding: 1.25rem 2.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(8px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .host-title {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .host-badge {
-            background: #1e293b;
-            border: 1px solid #334155;
-            padding: 0.4rem 0.9rem;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--accent);
-            letter-spacing: 0.5px;
-        }
-
-        .net-badges {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .net-pill {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.4rem 0.9rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .net-green { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .net-yellow { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-        .net-red { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-
-        .indicator-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-
-        /* Main Kiosk Container */
-        .kiosk-container {
-            flex: 1;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 2rem;
-        }
-
-        .kiosk-card {
-            background: var(--panel-bg);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            width: 100%;
-            max-width: 520px;
-            padding: 2.5rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-            backdrop-filter: blur(16px);
-            text-align: center;
-            position: relative;
-        }
-
-        .state-banner {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1.25rem;
-            border-radius: 30px;
-            font-weight: 700;
-            font-size: 1rem;
-            margin-bottom: 1.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .banner-AVAILABLE { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid var(--color-avail); }
-        .banner-HELD { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid var(--color-held); }
-        .banner-OCCUPIED { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid var(--color-occupied); }
-        .banner-MAINTENANCE { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid var(--color-maint); }
-
-        .kiosk-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
-        .kiosk-sub { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.75rem; line-height: 1.5; }
-
-        /* Reserved Held Details Box */
-        .reserved-box {
-            background: rgba(245, 158, 11, 0.08);
-            border: 1px solid rgba(245, 158, 11, 0.3);
-            border-radius: 10px;
-            padding: 1.25rem;
-            margin-bottom: 1.75rem;
-            text-align: left;
-        }
-
-        .reserved-row { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; }
-        .reserved-label { color: var(--text-muted); }
-        .reserved-value { font-weight: 600; color: var(--text-main); }
-        .countdown-timer { font-size: 1.35rem; font-weight: 800; color: #fbbf24; text-align: center; margin-top: 0.75rem; }
-
-        /* Form */
-        .form-group { text-align: left; margin-bottom: 1.25rem; }
-        label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem; font-weight: 500; }
-        input {
-            width: 100%;
-            background: #111827;
-            border: 1px solid #374151;
-            padding: 0.8rem 1rem;
-            border-radius: 8px;
-            color: white;
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        input:focus { border-color: var(--accent); }
-
-        .btn-unlock {
-            width: 100%;
-            background: linear-gradient(135deg, #0284c7, #2563eb);
-            color: white;
-            border: none;
-            padding: 0.9rem;
-            border-radius: 8px;
-            font-size: 1.05rem;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
-            transition: opacity 0.2s, transform 0.1s;
-        }
-        .btn-unlock:hover { opacity: 0.95; }
-        .btn-unlock:active { transform: scale(0.99); }
-
-        .btn-logout {
-            width: 100%;
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 0.8rem;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 0.75rem;
-        }
-
-        .btn-desktop {
-            width: 100%;
-            background: #0284c7;
-            color: white;
-            border: none;
-            padding: 0.85rem;
-            border-radius: 8px;
-            font-size: 1.05rem;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 1.25rem;
-            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-        .btn-desktop:hover { opacity: 0.95; }
-
-        /* Floating Mini Dock on Desktop */
-        #floatingDock {
-            position: fixed;
-            top: 14px;
-            right: 20px;
-            background: rgba(15, 23, 42, 0.95);
-            border: 1px solid #334155;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.7);
-            backdrop-filter: blur(12px);
-            border-radius: 30px;
-            padding: 0.5rem 1.2rem;
-            display: none;
-            align-items: center;
-            gap: 1rem;
-            z-index: 999999;
-            font-size: 0.85rem;
-        }
-        .mini-btn-logout {
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 0.4rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            cursor: pointer;
-        }
-        .mini-btn-expand {
-            background: #1e293b;
-            color: #38bdf8;
-            border: 1px solid #334155;
-            padding: 0.4rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        /* Mode: Floating Mini Dock Window (?floating=1) */
-        body.floating-mode {
-            background: #0f172a !important;
-            min-height: 100vh !important;
-            margin: 0 !important;
-            padding: 0 16px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            border-bottom: 2px solid #0284c7;
-        }
-
-        body.floating-mode .top-bar,
-        body.floating-mode .kiosk-container,
-        body.floating-mode footer,
-        body.floating-mode #floatingDock {
-            display: none !important;
-        }
-
-        #floatingBarWidget {
-            display: none;
-            width: 100%;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        body.floating-mode #floatingBarWidget {
-            display: flex !important;
-        }
-
-        .dock-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .dock-icon {
-            width: 34px;
-            height: 34px;
-            border-radius: 8px;
-            background: rgba(56, 189, 248, 0.15);
-            border: 1px solid rgba(56, 189, 248, 0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.15rem;
-            color: #38bdf8;
-        }
-
-        .dock-user-title {
-            font-size: 0.92rem;
-            font-weight: 700;
-            color: #f8fafc;
-        }
-
-        .dock-user-sub {
-            font-size: 0.76rem;
-            color: #94a3b8;
-        }
-
-        .dock-btn-logout {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap;
-        }
-        .dock-btn-logout:hover {
-            opacity: 0.9;
-        }
-
-        /* Occupied Session Box */
-        .session-box {
-            background: rgba(99, 102, 241, 0.08);
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            border-radius: 10px;
-            padding: 1.25rem;
-            margin-bottom: 1.5rem;
-            text-align: left;
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-            margin-top: 1rem;
-        }
-
-        .metric-cell {
-            background: #141c2c;
-            border: 1px solid #233147;
-            padding: 0.6rem;
-            border-radius: 6px;
-            text-align: center;
-        }
-        .metric-num { font-size: 1.1rem; font-weight: 700; color: var(--accent); }
-        .metric-lbl { font-size: 0.75rem; color: var(--text-muted); }
-
-        /* Error/Message Box */
-        .msg-box {
-            margin-top: 1rem;
-            padding: 0.75rem;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            display: none;
-            line-height: 1.4;
-        }
-        .msg-error { background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; display: block; }
-        .msg-success { background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #6ee7b7; display: block; }
-
-        .btn-power {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-            background: rgba(239, 68, 68, 0.15);
-            color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.35);
-            padding: 0.45rem 1rem;
-            border-radius: 20px;
-            font-size: 0.82rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .btn-power:hover {
-            background: #ef4444;
-            color: #ffffff;
-            border-color: #ef4444;
-            box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
-            transform: translateY(-1px);
-        }
-        .btn-power-discrete {
-            background: transparent;
-            color: #94a3b8;
-            border: 1px solid #334155;
-            padding: 0.55rem 1.2rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.45rem;
-        }
-        .btn-power-discrete:hover {
-            background: rgba(239, 68, 68, 0.2);
-            color: #f87171;
-            border-color: #ef4444;
-        }
-
-        /* Footer */
-        footer {
-            padding: 1rem;
-            text-align: center;
-            font-size: 0.8rem;
-            color: #475569;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/workstation.css">
+    <script src="/static/js/anime.min.js"></script>
 </head>
 <body>
 
+    <!-- TOP STATUS BAR -->
     <div class="top-bar">
         <div class="host-title">
-            <span class="host-badge" id="hostBadge">COMP-PC-01</span>
-            <span style="font-size: 0.9rem; color: var(--text-muted);" id="labNameDisplay">Computing Lab</span>
+            <img src="/static/iiitk.jpeg" alt="IIITDM Kurnool" class="institution-emblem" />
+            <div class="host-info">
+                <div class="host-badge-row">
+                    <span class="host-badge" id="hostBadge">COMP-PC-01</span>
+                    <span class="inst-name">IIITDM Kurnool</span>
+                </div>
+                <div class="lab-name-sub" id="labNameDisplay">Computing Lab</div>
+            </div>
         </div>
         <div class="net-badges">
-            <div class="net-pill net-green" id="lanPill">
+            <div class="net-chip net-green" id="lanPill">
                 <span class="indicator-dot"></span>
                 <span>LAN Connected to Lab Server</span>
             </div>
-            <div class="net-pill net-yellow" id="wanPill">
+            <div class="net-chip net-yellow" id="wanPill">
                 <span class="indicator-dot"></span>
                 <span>Campus Internet Locked (Captive Portal)</span>
             </div>
@@ -431,93 +36,96 @@
         </div>
     </div>
 
+    <!-- MAIN KIOSK CONTAINER -->
     <div class="kiosk-container">
-        <div class="kiosk-card">
+        <div class="kiosk-card" id="kioskCard">
             
+            <!-- Institutional Header Block -->
+            <div class="inst-header-block">
+                <img src="/static/iiitk.jpeg" alt="IIITDM Kurnool" class="inst-header-logo" />
+                <div class="inst-header-text">
+                    <div class="inst-header-title">IIITDM KURNOOL</div>
+                    <div class="inst-header-sub">Central Computing &amp; Academic Laboratories</div>
+                </div>
+            </div>
+
+            <!-- State Banner -->
             <div id="stateBadge" class="state-banner banner-AVAILABLE">
                 🟢 Workstation Available
             </div>
 
-            <div id="availableView">
-                <h2 class="kiosk-title">Log In to Workstation</h2>
-                <p class="kiosk-sub">Machine is available for walk-in access. Enter your university roll number and password to begin session.</p>
+            <!-- UNIFIED LOGIN VIEW -->
+            <div id="loginView">
+                <!-- 1. Technical Club Event Reserved Context -->
+                <div id="clubHeldContext" class="context-box" style="display: none; text-align: center;">
+                    <div class="club-emblem-wrap">
+                        <img id="clubLogoImg" src="/static/clubs/gdg.jpeg" alt="Club Logo" class="club-emblem-img" />
+                    </div>
+                    <div class="club-category-tag" id="clubNameHeader">Google Developer Groups</div>
+                    <h2 class="kiosk-title" id="clubEventTitle" style="margin: 0.35rem 0 0.5rem 0; font-size: 1.35rem;">Intro to Development</h2>
+                    <p class="kiosk-sub" style="margin-bottom: 0;">Reserved for approved club workshop participants. Authenticate to unlock workstation.</p>
+                </div>
 
-                <form onsubmit="handleUnlock(event)">
+                <!-- 1b. Faculty Session Reserved Context -->
+                <div id="facultyHeldContext" class="context-box" style="display: none; text-align: center;">
+                    <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">🎓</div>
+                    <div class="club-category-tag" style="color: #4ade80;" id="facultyCourseHeader">OPERATING SYSTEMS LAB</div>
+                    <h2 class="kiosk-title" id="facultyBatchTitle" style="margin: 0.35rem 0 0.5rem 0; font-size: 1.35rem;">3rd Year CSE</h2>
+                    <p class="kiosk-sub" id="facultyInstructorSubtitle" style="margin-bottom: 0;">Session conducted by <strong>Faculty</strong>. Enrolled batch students can log in to begin practical work.</p>
+                </div>
+
+                <!-- 2. Individual Student Reservation Context -->
+                <div id="individualHeldContext" class="context-box" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.04em;">Assigned Booking</span>
+                        <span style="font-size: 0.72rem; color: var(--text-muted);">Strict Allocation</span>
+                    </div>
+
+                    <div class="reserved-row">
+                        <span class="reserved-label">Assigned Student:</span>
+                        <span class="reserved-value" id="heldStudentName">Alice Johnson</span>
+                    </div>
+                    <div class="reserved-row">
+                        <span class="reserved-label">Roll Number:</span>
+                        <span class="reserved-value" id="heldRollNo">STU001</span>
+                    </div>
+                    <div class="reserved-row">
+                        <span class="reserved-label">Grace Expiry:</span>
+                        <span class="reserved-value" id="heldGraceTime">10:45 AM</span>
+                    </div>
+
+                    <div class="countdown-box">
+                        <div class="countdown-label">Hold Grace Period Remaining</div>
+                        <div class="countdown-timer" id="graceCountdown">14:59</div>
+                    </div>
+                </div>
+
+                <!-- 3. Walk-in Available Context -->
+                <div id="availableContext" style="margin-bottom: 1.25rem;">
+                    <h2 class="kiosk-title">Log In to Workstation</h2>
+                    <p class="kiosk-sub" style="margin-bottom: 0;">Machine is available for walk-in access. Enter your university roll number and password to begin session.</p>
+                </div>
+
+                <!-- SINGLE UNIFIED AUTHENTICATION FORM -->
+                <form id="unifiedAuthForm" onsubmit="handleUnlock(event)">
                     <div class="form-group">
-                        <label>Student Roll Number</label>
-                        <input type="text" id="walkinRoll" placeholder="e.g. STU001" required autocomplete="off" />
+                        <label id="loginRollLabel">Student Roll Number</label>
+                        <input type="text" id="loginRollInput" placeholder="e.g. STU001 or 21CS045" required autocomplete="off" />
                     </div>
                     <div class="form-group">
                         <label>Password</label>
-                        <input type="password" id="walkinPw" placeholder="Enter password" required />
+                        <input type="password" id="loginPwInput" placeholder="Enter password" required />
                     </div>
-                    <button type="submit" class="btn-unlock" id="unlockBtn">🔓 Unlock Workstation</button>
+                    <button type="submit" class="btn-unlock" id="loginSubmitBtn">🔓 Unlock Workstation</button>
                 </form>
             </div>
 
-            <div id="heldView" style="display: none;">
-                <!-- 1. Individual Student Reservation View -->
-                <div id="individualHeldView">
-                    <h2 class="kiosk-title">Workstation Reserved</h2>
-                    <p class="kiosk-sub">This PC is reserved. Only the assigned student can authenticate to unlock.</p>
-
-                    <div class="reserved-box">
-                        <div class="reserved-row">
-                            <span class="reserved-label">Assigned Student:</span>
-                            <span class="reserved-value" id="heldStudentName">Alice Johnson</span>
-                        </div>
-                        <div class="reserved-row">
-                            <span class="reserved-label">Roll Number:</span>
-                            <span class="reserved-value" id="heldRollNo">STU001</span>
-                        </div>
-                        <div class="reserved-row">
-                            <span class="reserved-label">Grace Expiry:</span>
-                            <span class="reserved-value" id="heldGraceTime">10:45 AM</span>
-                        </div>
-                        <div class="countdown-timer" id="graceCountdown">14:59</div>
-                    </div>
-
-                    <form onsubmit="handleUnlock(event)">
-                        <div class="form-group">
-                            <label>Reserved Student Roll Number</label>
-                            <input type="text" id="heldRollInput" placeholder="Confirm Roll Number" autocomplete="off" />
-                        </div>
-                        <div class="form-group">
-                            <label>Password</label>
-                            <input type="password" id="heldPwInput" placeholder="Enter password" />
-                        </div>
-                        <button type="submit" class="btn-unlock">🔓 Unlock Reserved Session</button>
-                    </form>
-                </div>
-
-                <!-- 2. Technical Club Event Reserved View -->
-                <div id="clubHeldView" style="display: none;">
-                    <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 0.85rem;">
-                        <img id="clubLogoImg" src="/static/clubs/gdg.svg" alt="Club Logo" style="height: 76px; width: 76px; object-fit: contain; filter: drop-shadow(0 4px 14px rgba(56, 189, 248, 0.45));" />
-                    </div>
-                    <div style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; color: #38bdf8;" id="clubNameHeader">Google Developer Groups</div>
-                    <h2 class="kiosk-title" id="clubEventTitle" style="margin: 0.35rem 0 0.5rem 0; font-size: 1.55rem; color: #f8fafc;">Intro to Development</h2>
-                    <p class="kiosk-sub" style="margin-bottom: 1.25rem;">⚡ Lab workstation reserved for technical club workshop. <strong>Any registered student</strong> can log in to participate!</p>
-
-                    <form onsubmit="handleUnlock(event)">
-                        <div class="form-group">
-                            <label>Student Roll Number</label>
-                            <input type="text" id="clubRollInput" placeholder="e.g. STU001 or 21CS045" autocomplete="off" />
-                        </div>
-                        <div class="form-group">
-                            <label>Password</label>
-                            <input type="password" id="clubPwInput" placeholder="Enter password" />
-                        </div>
-                        <button type="submit" class="btn-unlock" style="background: linear-gradient(135deg, #10b981, #0284c7);">🚀 Join Club Session & Unlock</button>
-                    </form>
-                </div>
-            </div>
-
+            <!-- OCCUPIED ACTIVE SESSION VIEW -->
             <div id="occupiedView" style="display: none;">
                 <h2 class="kiosk-title">Active Session in Progress</h2>
-                <p class="kiosk-sub">Workstation unlocked and sandbox active.</p>
+                <p class="kiosk-sub" style="margin-bottom: 1rem;">Workstation unlocked and sandbox active.</p>
 
-                <div class="session-box">
+                <div class="context-box">
                     <div class="reserved-row">
                         <span class="reserved-label">Active User:</span>
                         <span class="reserved-value" id="occStudentName">Alice Johnson</span>
@@ -543,21 +151,24 @@
                     </div>
                 </div>
 
-                <button class="btn-desktop" onclick="minimizeToFloatingBar()">💻 Minimize & Open Linux Desktop</button>
-                <div style="margin: 0.75rem 0; font-size: 0.8rem; color: #94a3b8; line-height: 1.4;">
+                <button class="btn-desktop" onclick="minimizeToFloatingBar()">💻 Minimize &amp; Open Linux Desktop</button>
+                <div style="margin: 0.75rem 0; font-size: 0.76rem; color: var(--text-muted); line-height: 1.4;">
                     💡 <em>Shortcut: Press <strong>Super (Windows key)</strong> or <strong>Ctrl+Alt+T</strong> to launch Terminal & Apps anytime.</em>
                 </div>
-                <button class="btn-logout" onclick="handleLogout()">🔒 Logout & Re-lock Workstation</button>
+                <button class="btn-logout" onclick="handleLogout()">🔒 Logout &amp; Re-lock Workstation</button>
             </div>
 
+            <!-- MAINTENANCE OFFLINE VIEW -->
             <div id="maintenanceView" style="display: none;">
-                <h2 class="kiosk-title" style="color: #ef4444;">Workstation Offline</h2>
+                <h2 class="kiosk-title" style="color: #f87171;">Workstation Offline</h2>
                 <p class="kiosk-sub">This workstation is undergoing scheduled maintenance or hardware diagnostics. Please use an adjacent machine.</p>
             </div>
 
+            <!-- STATUS MESSAGE BOX -->
             <div id="messageBox" class="msg-box"></div>
 
-            <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 1.25rem;">
+            <!-- DISCRETE POWER BUTTON IN FOOTER OF CARD -->
+            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1.15rem;">
                 <button type="button" class="btn-power-discrete" onclick="handlePowerOff()" title="Shut down workstation immediately">
                     ⏻ Shut Down Workstation
                 </button>
@@ -567,25 +178,46 @@
 
     <!-- Floating Mini Dock on Desktop -->
     <div id="floatingDock">
-        <span style="display: flex; align-items: center; gap: 0.4rem; color: #34d399; font-weight: 600;">
-            <span class="indicator-dot" style="background:#10b981;"></span>
+        <span style="display: flex; align-items: center; gap: 0.4rem; color: #4ade80; font-weight: 600;">
+            <span class="indicator-dot" style="background:#4ade80;"></span>
             <span id="dockUser">Active Session</span>
         </span>
-        <span style="color: #94a3b8;" id="dockStats">CPU: 4.2% | RAM: 18%</span>
+        <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.78rem;" id="dockStats">CPU: 4.2% | RAM: 18%</span>
         <button class="mini-btn-expand" onclick="expandFromFloatingBar()">🔍 Dashboard</button>
-        <button class="mini-btn-logout" onclick="handleLogout()">🔒 Logout & Relock</button>
+        <button class="mini-btn-logout" onclick="handleLogout()">🔒 Logout &amp; Relock</button>
     </div>
 
     <!-- Floating Mini Dock for Desktop Window Mode (?floating=1) -->
     <div id="floatingBarWidget">
-        <div class="dock-left">
-            <div class="dock-icon">⚡</div>
-            <div>
-                <div class="dock-user-title" id="floatingUserTitle">Active Student Session</div>
-                <div class="dock-user-sub" id="floatingUserSub">Desktop Unlocked &bull; Sandboxed</div>
+        <div class="dock-hud-left">
+            <div class="dock-status-indicator" title="Active Sandboxed Session">
+                <span class="dock-live-dot"></span>
+            </div>
+            <div class="dock-identity-block">
+                <div class="dock-user-row">
+                    <span class="dock-user-name" id="floatingUserName">Active Student Session</span>
+                    <span class="dock-roll-badge" id="floatingRollBadge">STUDENT</span>
+                </div>
+                <div class="dock-meta-row">
+                    <span class="dock-host-tag" id="floatingHostBadge">COMP-PC-01</span>
+                    <span class="dock-divider">&bull;</span>
+                    <span class="dock-telemetry-chip" id="floatingCpuChip">CPU 0.1%</span>
+                    <span class="dock-telemetry-chip" id="floatingRamChip">RAM 7.1%</span>
+                </div>
+                <!-- Hidden fallback elements for backwards compatibility -->
+                <span id="floatingUserTitle" style="display: none;"></span>
+                <span id="floatingUserSub" style="display: none;"></span>
             </div>
         </div>
-        <button class="dock-btn-logout" onclick="handleLogout()">🔒 Logout &amp; Relock</button>
+        <div class="dock-hud-right">
+            <button class="dock-btn-logout-cool" onclick="handleLogout()" title="End session and relock machine">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>Logout &amp; Relock</span>
+            </button>
+        </div>
     </div>
 
     <footer>
@@ -612,6 +244,7 @@
         let remainingGraceSeconds = 0;
         let countdownTimer = null;
         let currentActiveSessionId = null;
+        let previousStateKey = null;
 
         document.getElementById('hostBadge').innerText = HOSTNAME;
 
@@ -626,6 +259,17 @@
             setInterval(fetchLockState, 2500);
             // Run countdown tick every second
             setInterval(tickCountdown, 1000);
+
+            // Initial entrance animation via anime.js
+            if (window.anime && !isFloatingMode) {
+                window.anime({
+                    targets: '#kioskCard',
+                    opacity: [0.75, 1],
+                    translateY: [8, 0],
+                    duration: 350,
+                    easing: 'easeOutQuad'
+                });
+            }
         });
 
         async function fetchLockState() {
@@ -635,14 +279,16 @@
                 const data = await res.json();
                 
                 // Set LAN badge green
-                document.getElementById('lanPill').className = "net-pill net-green";
-                document.getElementById('lanPill').innerHTML = `<span class="indicator-dot"></span><span>LAN Connected to Lab Server</span>`;
+                const lanPill = document.getElementById('lanPill');
+                lanPill.className = "net-chip net-green";
+                lanPill.innerHTML = `<span class="indicator-dot"></span><span>LAN Connected to Lab Server</span>`;
 
                 applyLockState(data);
             } catch (err) {
                 // LAN offline
-                document.getElementById('lanPill').className = "net-pill net-red";
-                document.getElementById('lanPill').innerHTML = `<span class="indicator-dot"></span><span>LAN Disconnected (Check Ethernet cable)</span>`;
+                const lanPill = document.getElementById('lanPill');
+                lanPill.className = "net-chip net-red";
+                lanPill.innerHTML = `<span class="indicator-dot"></span><span>LAN Disconnected (Check Ethernet cable)</span>`;
             }
         }
 
@@ -651,46 +297,22 @@
             document.getElementById('labNameDisplay').innerText = data.lab_name;
 
             const stateBadge = document.getElementById('stateBadge');
-            stateBadge.className = `state-banner banner-${data.state}`;
-            stateBadge.innerText = data.state;
 
             // View toggles
-            document.getElementById('availableView').style.display = 'none';
-            document.getElementById('heldView').style.display = 'none';
+            document.getElementById('loginView').style.display = 'none';
             document.getElementById('occupiedView').style.display = 'none';
             document.getElementById('maintenanceView').style.display = 'none';
+            document.getElementById('clubHeldContext').style.display = 'none';
+            document.getElementById('facultyHeldContext').style.display = 'none';
+            document.getElementById('individualHeldContext').style.display = 'none';
+            document.getElementById('availableContext').style.display = 'none';
 
-            if (data.state === 'AVAILABLE') {
-                document.getElementById('availableView').style.display = 'block';
-                stateBadge.innerText = "🟢 Workstation Available";
-                setWanStatus(false);
-            } else if (data.state === 'HELD') {
-                document.getElementById('heldView').style.display = 'block';
-                setWanStatus(false);
+            const stateKey = `${data.state}_${data.is_club_event}_${data.is_faculty_lab}`;
 
-                if (data.is_club_event) {
-                    stateBadge.innerText = `⚡ ${data.club_name || 'CLUB'} EVENT`;
-                    stateBadge.className = 'state-banner banner-HELD';
-                    document.getElementById('individualHeldView').style.display = 'none';
-                    document.getElementById('clubHeldView').style.display = 'block';
-                    document.getElementById('clubLogoImg').src = data.club_logo_url || '/static/clubs/gdg.svg';
-                    document.getElementById('clubNameHeader').innerText = data.club_name || 'Technical Club';
-                    document.getElementById('clubEventTitle').innerText = data.event_title || 'Club Workshop';
-                } else {
-                    document.getElementById('individualHeldView').style.display = 'block';
-                    document.getElementById('clubHeldView').style.display = 'none';
-                    stateBadge.innerText = "🔒 Workstation Reserved";
-                    document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
-                    document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
-                    document.getElementById('heldRollInput').value = data.reserved_roll_no || '';
-                    if (data.grace_deadline) {
-                        document.getElementById('heldGraceTime').innerText = new Date(data.grace_deadline).toLocaleTimeString();
-                    }
-                    remainingGraceSeconds = data.remaining_grace_seconds || 0;
-                }
-            } else if (data.state === 'OCCUPIED') {
+            if (data.state === 'OCCUPIED') {
                 document.getElementById('occupiedView').style.display = 'block';
                 stateBadge.innerText = "⚡ Session Active";
+                stateBadge.className = 'state-banner banner-OCCUPIED';
                 if (data.active_session) {
                     currentActiveSessionId = data.active_session.session_id;
                     document.getElementById('occStudentName').innerText = data.active_session.student_name;
@@ -700,25 +322,121 @@
                     document.getElementById('occMemLoad').innerText = `${data.active_session.memory_percent || 14.2}%`;
 
                     if (isFloatingMode) {
-                        document.getElementById('floatingUserTitle').innerText = `${data.active_session.student_name} (${data.active_session.roll_no})`;
-                        document.getElementById('floatingUserSub').innerText = `${HOSTNAME} • CPU: ${data.active_session.cpu_percent || 2}% • RAM: ${data.active_session.memory_percent || 14}%`;
+                        const studentName = data.active_session.student_name || 'Student';
+                        const rollNo = data.active_session.roll_no || '-';
+                        const cpu = data.active_session.cpu_percent || 0.1;
+                        const ram = data.active_session.memory_percent || 7.1;
+
+                        const nameElem = document.getElementById('floatingUserName');
+                        if (nameElem) nameElem.innerText = studentName;
+                        const rollElem = document.getElementById('floatingRollBadge');
+                        if (rollElem) rollElem.innerText = rollNo;
+                        const hostElem = document.getElementById('floatingHostBadge');
+                        if (hostElem) hostElem.innerText = HOSTNAME;
+                        const cpuElem = document.getElementById('floatingCpuChip');
+                        if (cpuElem) cpuElem.innerText = `CPU ${cpu}%`;
+                        const ramElem = document.getElementById('floatingRamChip');
+                        if (ramElem) ramElem.innerText = `RAM ${ram}%`;
+
+                        // Backwards compatibility fallback
+                        const titleElem = document.getElementById('floatingUserTitle');
+                        if (titleElem) titleElem.innerText = `${studentName} (${rollNo})`;
+                        const subElem = document.getElementById('floatingUserSub');
+                        if (subElem) subElem.innerText = `${HOSTNAME} • CPU: ${cpu}% • RAM: ${ram}%`;
                     }
                 }
                 setWanStatus(true);
             } else if (data.state === 'MAINTENANCE') {
                 document.getElementById('maintenanceView').style.display = 'block';
                 stateBadge.innerText = "⚠️ Maintenance Mode";
+                stateBadge.className = 'state-banner banner-MAINTENANCE';
+                setWanStatus(false);
+            } else if (data.is_club_event) {
+                // Priority Club Event mode
+                document.getElementById('loginView').style.display = 'block';
+                document.getElementById('clubHeldContext').style.display = 'block';
+                stateBadge.innerText = `⚡ ${data.club_name || 'TECHNICAL CLUB'} EVENT`;
+                stateBadge.className = 'state-banner banner-HELD';
+                document.getElementById('clubLogoImg').src = data.club_logo_url || '/static/clubs/gdg.jpeg';
+                document.getElementById('clubNameHeader').innerText = data.club_name || 'Technical Coding Club';
+                document.getElementById('clubEventTitle').innerText = data.event_title || 'Club Workshop';
+                document.getElementById('loginRollLabel').innerText = "Student Roll Number";
+                const btn = document.getElementById('loginSubmitBtn');
+                btn.innerText = "🚀 Join Club Workshop & Unlock";
+                btn.style.backgroundColor = "#059669";
+                btn.style.borderColor = "#059669";
+                setWanStatus(false);
+            } else if (data.is_faculty_lab) {
+                // Faculty Practical Lab mode
+                document.getElementById('loginView').style.display = 'block';
+                document.getElementById('facultyHeldContext').style.display = 'block';
+                stateBadge.innerText = `🎓 FACULTY PRACTICAL LAB`;
+                stateBadge.className = 'state-banner banner-HELD';
+                document.getElementById('facultyCourseHeader').innerText = data.course_name || 'Practical Session';
+                document.getElementById('facultyBatchTitle').innerText = data.batch_name || 'Enrolled Batch';
+                document.getElementById('facultyInstructorSubtitle').innerHTML = `Session conducted by <strong>${data.faculty_name || 'Faculty'}</strong>. Enrolled batch students can log in to begin practical work.`;
+                document.getElementById('loginRollLabel').innerText = "Student Roll Number";
+                const btn = document.getElementById('loginSubmitBtn');
+                btn.innerText = "🎓 Begin Lab Session & Unlock";
+                btn.style.backgroundColor = "#15803d";
+                btn.style.borderColor = "#15803d";
+                setWanStatus(false);
+            } else if (data.state === 'HELD') {
+                // Individual Student Reservation mode
+                document.getElementById('loginView').style.display = 'block';
+                document.getElementById('individualHeldContext').style.display = 'block';
+                stateBadge.innerText = "🔒 Workstation Reserved";
+                stateBadge.className = 'state-banner banner-HELD';
+                document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
+                document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
+                const rollInput = document.getElementById('loginRollInput');
+                if (!rollInput.value) {
+                    rollInput.value = data.reserved_roll_no || '';
+                }
+                if (data.grace_deadline) {
+                    document.getElementById('heldGraceTime').innerText = new Date(data.grace_deadline).toLocaleTimeString();
+                }
+                remainingGraceSeconds = data.remaining_grace_seconds || 0;
+                document.getElementById('loginRollLabel').innerText = "Reserved Student Roll Number";
+                const btn = document.getElementById('loginSubmitBtn');
+                btn.innerText = "🔓 Unlock Reserved Workstation";
+                btn.style.backgroundColor = "#d97706";
+                btn.style.borderColor = "#d97706";
+                setWanStatus(false);
+            } else {
+                // Available Walk-in mode
+                document.getElementById('loginView').style.display = 'block';
+                document.getElementById('availableContext').style.display = 'block';
+                stateBadge.innerText = "🟢 Workstation Available";
+                stateBadge.className = 'state-banner banner-AVAILABLE';
+                document.getElementById('loginRollLabel').innerText = "Student Roll Number";
+                const btn = document.getElementById('loginSubmitBtn');
+                btn.innerText = "🔓 Unlock Workstation";
+                btn.style.backgroundColor = "#2563eb";
+                btn.style.borderColor = "#2563eb";
                 setWanStatus(false);
             }
+
+            // Animate on state transition
+            if (previousStateKey && previousStateKey !== stateKey && window.anime && !isFloatingMode) {
+                window.anime({
+                    targets: '#kioskCard',
+                    opacity: [0.8, 1],
+                    translateY: [4, 0],
+                    duration: 250,
+                    easing: 'easeOutQuad'
+                });
+            }
+            previousStateKey = stateKey;
         }
 
         function setWanStatus(unlocked) {
             const pill = document.getElementById('wanPill');
             if (unlocked) {
-                pill.className = "net-pill net-green";
+                pill.className = "net-chip net-green";
                 pill.innerHTML = `<span class="indicator-dot"></span><span>Campus Internet Active (Captive Portal Bridge)</span>`;
             } else {
-                pill.className = "net-pill net-yellow";
+                pill.className = "net-chip net-yellow";
                 pill.innerHTML = `<span class="indicator-dot"></span><span>Campus Internet Locked (Captive Portal)</span>`;
             }
         }
@@ -728,8 +446,10 @@
                 remainingGraceSeconds--;
                 const mins = Math.floor(remainingGraceSeconds / 60);
                 const secs = remainingGraceSeconds % 60;
-                document.getElementById('graceCountdown').innerText = 
-                    `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                const cdElem = document.getElementById('graceCountdown');
+                if (cdElem) {
+                    cdElem.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                }
             }
         }
 
@@ -737,21 +457,18 @@
             e.preventDefault();
             showMessage("", "");
 
-            let rollNo = "";
-            let password = "";
+            const rollNo = document.getElementById('loginRollInput').value.trim();
+            const password = document.getElementById('loginPwInput').value;
 
-            if (currentLockState.state === 'HELD') {
-                if (currentLockState.is_club_event) {
-                    rollNo = document.getElementById('clubRollInput').value.trim();
-                    password = document.getElementById('clubPwInput').value;
-                } else {
-                    rollNo = document.getElementById('heldRollInput').value.trim();
-                    password = document.getElementById('heldPwInput').value;
-                }
-            } else {
-                rollNo = document.getElementById('walkinRoll').value.trim();
-                password = document.getElementById('walkinPw').value;
+            if (!rollNo || !password) {
+                showMessage("Please enter both roll number and password", "msg-error");
+                return;
             }
+
+            const submitBtn = document.getElementById('loginSubmitBtn');
+            submitBtn.disabled = true;
+            const originalText = submitBtn.innerText;
+            submitBtn.innerText = "Authenticating...";
 
             try {
                 const res = await fetch('/api/agent/checkin', {
@@ -768,7 +485,7 @@
 
                 const data = await res.json();
                 if (res.ok) {
-                    showMessage("Access granted! Unlocking complete Ubuntu desktop...", "msg-success");
+                    showMessage("Access granted! Unlocking complete Linux desktop environment...", "msg-success");
                     currentActiveSessionId = data.session_id;
 
                     // Signal local daemon on machine to kill fullscreen kiosk and reveal desktop
@@ -779,11 +496,13 @@
                     }
                     setTimeout(fetchLockState, 500);
                 } else {
-                    // Strict Access Enforcement error message
-                    showMessage(data.detail || "Authentication failed", "msg-error");
+                    showMessage(data.detail || "Authentication failed. Please verify credentials.", "msg-error");
                 }
             } catch (err) {
-                showMessage("Connection error reaching lab server", "msg-error");
+                showMessage("Connection error reaching lab server control plane.", "msg-error");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalText;
             }
         }
 
@@ -847,7 +566,7 @@
             document.querySelector('.kiosk-container').style.display = 'none';
             document.querySelector('.top-bar').style.display = 'none';
             document.querySelector('footer').style.display = 'none';
-            document.body.style.background = 'transparent';
+            document.body.style.backgroundColor = 'transparent';
             document.getElementById('floatingDock').style.display = 'flex';
             if (currentLockState && currentLockState.active_session) {
                 document.getElementById('dockUser').innerText = currentLockState.active_session.student_name;
@@ -859,7 +578,7 @@
             document.querySelector('.kiosk-container').style.display = 'flex';
             document.querySelector('.top-bar').style.display = 'flex';
             document.querySelector('footer').style.display = 'block';
-            document.body.style.background = 'radial-gradient(circle at 50% 20%, #172554, var(--bg-color) 70%)';
+            document.body.style.backgroundColor = '#09090b';
             document.getElementById('floatingDock').style.display = 'none';
         }
     </script>

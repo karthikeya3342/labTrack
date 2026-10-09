@@ -95,6 +95,7 @@ DECLARE
     v_res_id INT := NULL;
     v_res_student_id INT := NULL;
     v_res_student_name VARCHAR(100) := NULL;
+    v_res_batch_name VARCHAR(100) := NULL;
     v_session_id INT;
     v_club_event_id INT := NULL;
     v_sw_item TEXT;
@@ -126,20 +127,21 @@ BEGIN
 
     -- 3. PC state evaluation
     IF v_pc_state = 'HELD' THEN
-        -- Find the active/held reservation for this PC (including club events)
-        SELECT r.id, r.student_id, u.name, r.software_required, r.club_event_id
-        INTO v_res_id, v_res_student_id, v_res_student_name, v_sw_array, v_club_event_id
+        -- Find the active/held reservation for this PC
+        SELECT r.id, r.student_id, u.name, r.software_required, r.club_event_id, r.batch_name
+        INTO v_res_id, v_res_student_id, v_res_student_name, v_sw_array, v_club_event_id, v_res_batch_name
         FROM reservations r
-        JOIN users u ON u.id = r.student_id
+        LEFT JOIN users u ON u.id = r.student_id
         WHERE r.pc_id = v_pc_id
           AND r.status = 'HELD'
           AND (r.grace_deadline IS NULL OR v_now < r.grace_deadline)
+          AND upper(r.time_range) > v_now
         ORDER BY r.created_at DESC
         LIMIT 1;
 
         IF v_res_id IS NOT NULL THEN
-            IF v_club_event_id IS NOT NULL THEN
-                -- Club event reservation: Open checkin for any registered student!
+            IF v_club_event_id IS NOT NULL OR v_res_batch_name IS NOT NULL THEN
+                -- Club event or Faculty batch session: Open check-in for ANY registered student
                 UPDATE reservations
                 SET status = 'ACTIVE', student_id = v_user_id, updated_at = v_now
                 WHERE id = v_res_id;
@@ -160,32 +162,52 @@ BEGIN
 
     -- 4. If Available (or fell back to available): perform walk-in checkin with backfilling
     IF v_pc_state = 'AVAILABLE' THEN
-        -- Look ahead for the earliest upcoming reservation on this PC
-        SELECT lower(time_range) INTO v_next_res_start
-        FROM reservations
-        WHERE pc_id = v_pc_id
-          AND status IN ('PENDING', 'HELD')
-          AND lower(time_range) > v_now
-        ORDER BY lower(time_range) ASC
+        -- Check if an existing reservation already covers this PC for now (e.g. Club Event, Faculty batch, or advance reservation)
+        SELECT r.id, r.student_id, r.club_event_id, r.batch_name
+        INTO v_res_id, v_res_student_id, v_club_event_id, v_res_batch_name
+        FROM reservations r
+        WHERE r.pc_id = v_pc_id
+          AND r.status IN ('PENDING', 'HELD')
+          AND v_now >= lower(r.time_range)
+          AND v_now < upper(r.time_range)
+        ORDER BY r.created_at DESC
         LIMIT 1;
 
-        IF v_next_res_start IS NOT NULL THEN
-            -- Backfill up to 10 minutes prior to next booking, cap at 2 hours
-            v_walkin_end := LEAST(v_now + INTERVAL '2 hours', v_next_res_start - INTERVAL '5 minutes');
+        IF v_res_id IS NOT NULL THEN
+            IF v_club_event_id IS NOT NULL OR v_res_batch_name IS NOT NULL OR v_res_student_id = v_user_id THEN
+                -- Claim this existing reservation
+                UPDATE reservations
+                SET status = 'ACTIVE', student_id = v_user_id, updated_at = v_now
+                WHERE id = v_res_id;
+            ELSE
+                RAISE EXCEPTION 'Workstation is reserved for another user or cohort.';
+            END IF;
         ELSE
-            v_walkin_end := v_now + INTERVAL '2 hours';
-        END IF;
+            -- Standard walk-in with lookahead
+            SELECT lower(time_range) INTO v_next_res_start
+            FROM reservations
+            WHERE pc_id = v_pc_id
+              AND status IN ('PENDING', 'HELD')
+              AND lower(time_range) > v_now
+            ORDER BY lower(time_range) ASC
+            LIMIT 1;
 
-        IF v_walkin_end <= v_now + INTERVAL '10 minutes' THEN
-            RAISE EXCEPTION 'Workstation % has an upcoming reservation starting shortly at %', p_hostname, v_next_res_start;
-        END IF;
+            IF v_next_res_start IS NOT NULL THEN
+                v_walkin_end := LEAST(v_now + INTERVAL '2 hours', v_next_res_start - INTERVAL '5 minutes');
+            ELSE
+                v_walkin_end := v_now + INTERVAL '2 hours';
+            END IF;
 
-        -- Create walk-in reservation
-        INSERT INTO reservations (
-            student_id, pc_id, task_type, time_range, status, grace_deadline
-        ) VALUES (
-            v_user_id, v_pc_id, 'Practice', tstzrange(v_now, v_walkin_end, '[)'), 'ACTIVE', v_now + INTERVAL '15 minutes'
-        ) RETURNING id INTO v_res_id;
+            IF v_walkin_end <= v_now + INTERVAL '10 minutes' THEN
+                RAISE EXCEPTION 'Workstation % has an upcoming reservation starting shortly at %', p_hostname, v_next_res_start;
+            END IF;
+
+            INSERT INTO reservations (
+                student_id, pc_id, task_type, time_range, status, grace_deadline, notes
+            ) VALUES (
+                v_user_id, v_pc_id, 'Practice', tstzrange(v_now, v_walkin_end, '[)'), 'ACTIVE', v_now + INTERVAL '15 minutes', 'Walk-in Session'
+            ) RETURNING id INTO v_res_id;
+        END IF;
     END IF;
 
     -- 5. Create Session
@@ -223,7 +245,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 3. fn_close_session: Closes an active session, frees PC to AVAILABLE, decrements licenses, logs audit
+-- 3. fn_close_session: Closes an active session, frees PC to AVAILABLE or restores HELD for ongoing club event
 CREATE OR REPLACE FUNCTION fn_close_session(
     p_session_id INT,
     p_reason TEXT DEFAULT 'Student Logout'
@@ -232,6 +254,7 @@ DECLARE
     v_pc_id INT;
     v_user_id INT;
     v_res_id INT;
+    v_club_event_id INT := NULL;
     v_sw_array TEXT[];
     v_sw_item TEXT;
     v_now TIMESTAMPTZ := CURRENT_TIMESTAMP;
@@ -256,8 +279,34 @@ BEGIN
         UPDATE reservations SET status = 'COMPLETED', updated_at = v_now WHERE id = v_res_id;
     END IF;
 
-    -- Restore Workstation state
-    UPDATE pcs SET state = 'AVAILABLE', updated_at = v_now WHERE id = v_pc_id;
+    -- Check if PC belongs to an ongoing approved club event
+    SELECT ce.id INTO v_club_event_id
+    FROM club_events ce
+    JOIN pcs p ON (p.lab_id = ce.lab_id OR p.lab_id = ce.secondary_lab_id)
+    WHERE p.id = v_pc_id
+      AND ce.status = 'APPROVED'
+      AND v_now < upper(ce.time_range)
+      AND v_now >= lower(ce.time_range)
+    LIMIT 1;
+
+    IF v_club_event_id IS NOT NULL THEN
+        -- Revert workstation to HELD for the club event
+        UPDATE pcs SET state = 'HELD', updated_at = v_now WHERE id = v_pc_id;
+        -- Create/restore held reservation for remaining club event window if no active one
+        IF NOT EXISTS (
+            SELECT 1 FROM reservations WHERE pc_id = v_pc_id AND club_event_id = v_club_event_id AND status = 'HELD'
+        ) THEN
+            INSERT INTO reservations (
+                student_id, pc_id, task_type, time_range, status, club_event_id, grace_deadline, notes
+            )
+            SELECT NULL, v_pc_id, 'Practice', tstzrange(v_now, upper(ce.time_range), '[)'), 'HELD', ce.id, upper(ce.time_range), 'Restored Club Event Reservation'
+            FROM club_events ce WHERE ce.id = v_club_event_id
+            ON CONFLICT DO NOTHING;
+        END IF;
+    ELSE
+        -- Restore Workstation state to AVAILABLE
+        UPDATE pcs SET state = 'AVAILABLE', updated_at = v_now WHERE id = v_pc_id;
+    END IF;
 
     -- Release Software Licenses
     IF v_sw_array IS NOT NULL THEN

@@ -18,6 +18,14 @@ def cleanup_after_module(client):
     # Close any active or held sessions on test machines
     client.post("/api/agent/close", json={"hostname": "COMP-PC-01", "reason": "Teardown cleanup"})
     client.post("/api/agent/close", json={"hostname": "AI-PC-01", "reason": "Teardown cleanup"})
+    import asyncio
+    from backend.app.core.database import execute
+    try:
+        asyncio.run(execute("DELETE FROM taskpool_entries WHERE status = 'QUEUED'"))
+        asyncio.run(execute("UPDATE reservations SET status = 'CANCELLED' WHERE pc_id = 1 AND status IN ('PENDING', 'HELD')"))
+        asyncio.run(execute("UPDATE pcs SET state = 'AVAILABLE' WHERE id = 1"))
+    except Exception:
+        pass
 
 def get_auth_token(client, roll_no="STU001", password="stu123"):
     resp = client.post("/api/auth/login", json={"roll_no": roll_no, "password": password})
@@ -107,6 +115,15 @@ def test_3_faculty_extra_lab_reservation_and_m1_constraint(client):
     # Check that spare PCs were left available in partially filled lab
     second_lab = data["lab_partition_plan"][1]
     assert second_lab["spare_pcs_available_for_others"] > 0
+
+    # Verify my-sessions aggregates this batch into exactly 1 session entry with 25 PCs (no duplicate rows)
+    sess_resp = client.get("/api/faculty/my-sessions", headers={"Authorization": f"Bearer {faculty_token}"})
+    assert sess_resp.status_code == 200
+    my_sessions = sess_resp.json()
+    batch_entries = [s for s in my_sessions if s["batch_name"] == batch_name]
+    assert len(batch_entries) == 1, f"Expected 1 aggregated entry, got {len(batch_entries)}"
+    assert batch_entries[0]["workstation_count"] == 25
+    assert len(batch_entries[0]["labs_involved"]) >= 2
 
     # Constraint M1 Violation Test:
     # Attempting to schedule another practical lab for the SAME batch on the SAME calendar day
@@ -230,11 +247,12 @@ def test_5_taskpool_waitlist_and_dynamic_aging_auto_promotion(client):
     3. Closing a session auto-promotes the queued student to HELD state.
     """
     admin_token = get_admin_token(client)
-    # Clear any prior queued entries for STU004
-    existing_wl = client.get("/api/scheduler/waitlist").json()
-    for e in existing_wl:
-        if e["roll_no"] == "STU004":
-            client.delete(f"/api/scheduler/waitlist/{e['id']}", headers={"Authorization": f"Bearer {admin_token}"})
+    # Master release to clear any leftover holds/sessions
+    client.post("/api/admin/system/release-all", headers={"Authorization": f"Bearer {admin_token}"})
+    # Clear waitlist
+    wl = client.get("/api/scheduler/waitlist").json()
+    for e in wl:
+        client.delete(f"/api/scheduler/waitlist/{e['id']}", headers={"Authorization": f"Bearer {admin_token}"})
 
     token = get_auth_token(client, "STU004")
 
@@ -259,9 +277,6 @@ def test_5_taskpool_waitlist_and_dynamic_aging_auto_promotion(client):
     assert any(e["id"] == entry_id for e in entries)
 
     # 3. Simulate session close on COMP-PC-01 in Lab 1 to trigger auto-promotion
-    # Ensure COMP-PC-01 session is closed if any exists
-    client.post("/api/agent/close", json={"hostname": "COMP-PC-01", "reason": "Pre-test reset"})
-
     # Now STU005 logs into COMP-PC-01
     checkin_resp = client.post("/api/agent/checkin", json={"hostname": "COMP-PC-01", "roll_no": "STU005", "password": "stu123"})
     assert checkin_resp.status_code == 200, checkin_resp.text
@@ -285,3 +300,36 @@ def test_5_taskpool_waitlist_and_dynamic_aging_auto_promotion(client):
     held_state = client.get("/api/pcs/COMP-PC-01/lock-state").json()
     assert held_state["state"] == "HELD"
     assert held_state["reserved_roll_no"] == "STU004"
+
+def test_6_faculty_cannot_book_individual_workstation(client):
+    """
+    Ensure faculty accounts cannot reserve individual workstations.
+    Faculty reservations are strictly cohort-level via /api/faculty/reserve-extra-lab.
+    """
+    faculty_token = get_auth_token(client, "faculty01", "faculty123")
+    
+    start_time = datetime.now(timezone.utc) + timedelta(days=20, hours=1)
+    end_time = start_time + timedelta(hours=1)
+
+    # Attempt individual workstation booking
+    resp = client.post(
+        "/api/reservations/advance",
+        headers={"Authorization": f"Bearer {faculty_token}"},
+        json={
+            "lab_id": 1,
+            "pc_id": 1,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "task_type": "Practice",
+            "software_required": ["Python"],
+            "notes": "Attempt personal booking"
+        }
+    )
+    assert resp.status_code == 403, f"Expected 403 Forbidden for faculty booking, got: {resp.status_code} - {resp.text}"
+    assert "Faculty members cannot book individual workstations" in resp.json()["detail"]
+
+    # Verify GET /my returns empty array for faculty
+    my_resp = client.get("/api/reservations/my", headers={"Authorization": f"Bearer {faculty_token}"})
+    assert my_resp.status_code == 200
+    assert my_resp.json() == []
+
