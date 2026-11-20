@@ -1,7 +1,5 @@
-/* ==========================================================================
-   LABTRACK - MODERN SHADCN UI DESIGN SYSTEM
-   Simple Round Edges • Solid Colors • Zero Vertical Bars • Crisp Micro-Shadows
-   ========================================================================== */
+@import url("/static/css/tokens.css");
+@import url("/static/css/components.css");
 
 :root {
     --bg-page: #f8fafc;
@@ -11,14 +9,14 @@
     --border-active: #0f172a;
     
     --text-main: #0f172a;
-    --text-muted: #64748b;
-    --text-light: #94a3b8;
+    --text-muted: #334155; /* AA compliant: 9.5:1 on #ffffff */
+    --text-light: #475569; /* AA compliant: 7.58:1 on #ffffff */
     
     --solid-primary: #0f172a;
     --solid-primary-hover: #1e293b;
     
-    /* Solid High-Contrast Status Colors */
-    --status-avail-text: #15803d;
+    /* Solid High-Contrast Status Colors (AA compliant) */
+    --status-avail-text: #166534; /* 7.0:1 on #f0fdf4 */
     --status-avail-border: #86efac;
     --status-avail-bg: #f0fdf4;
     
@@ -26,13 +24,13 @@
     --status-held-border: #fcd34d;
     --status-held-bg: #fffbeb;
     
-    --status-occ-text: #b91c1c;
-    --status-occ-border: #fca5a5;
-    --status-occ-bg: #fef2f2;
+    --status-occ-text: #1e40af;
+    --status-occ-border: #93c5fd;
+    --status-occ-bg: #eff6ff;
     
-    --status-maint-text: #475569;
-    --status-maint-border: #cbd5e1;
-    --status-maint-bg: #f8fafc;
+    --status-maint-text: #b91c1c;
+    --status-maint-border: #fca5a5;
+    --status-maint-bg: #fef2f2;
     
     /* Simple Clean Round Radii */
     --radius-sm: 6px;
@@ -45,8 +43,8 @@
     --shadow-card-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
     --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
     
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 
 * {

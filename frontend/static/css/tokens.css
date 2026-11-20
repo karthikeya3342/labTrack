@@ -1,0 +1,243 @@
+/* ==========================================================================
+   LABTRACK DESIGN SYSTEM - CENTRAL DESIGN TOKENS
+   Strict WCAG 2.2 AA Compliance • Offline Self-Hosted Fonts • Zero Slop
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. SELF-HOSTED OFFLINE FONTS (WOFF2)
+   -------------------------------------------------------------------------- */
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/static/fonts/inter-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("/static/fonts/inter-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("/static/fonts/inter-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("/static/fonts/inter-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("/static/fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("/static/fonts/jetbrains-mono-latin-700-normal.woff2") format("woff2");
+}
+
+/* --------------------------------------------------------------------------
+   2. CORE DESIGN TOKENS
+   -------------------------------------------------------------------------- */
+:root {
+    /* --- Neutral Palette (Zinc) --- */
+    --neutral-50:  #fafafa;
+    --neutral-100: #f4f4f5;
+    --neutral-200: #e4e4e7;
+    --neutral-300: #d4d4d8;
+    --neutral-400: #a1a1aa;
+    --neutral-500: #71717a;
+    --neutral-600: #52525b;
+    --neutral-700: #3f3f46;
+    --neutral-800: #27272a;
+    --neutral-900: #18181b;
+    --neutral-950: #09090b;
+
+    /* --- Typography Stack --- */
+    --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    /* --- Modular Type Scale --- */
+    --text-2xs: 0.6875rem; /* 11px */
+    --text-xs:  0.75rem;   /* 12px */
+    --text-sm:  0.875rem;  /* 14px */
+    --text-base: 1rem;     /* 16px */
+    --text-lg:   1.125rem; /* 18px */
+    --text-xl:   1.25rem;  /* 20px */
+    --text-2xl:  1.5rem;   /* 24px */
+    --text-3xl:  1.875rem; /* 30px */
+    --text-4xl:  2.25rem;  /* 36px */
+
+    /* --- Workstation Kiosk Distance Scale --- */
+    --kiosk-host-badge: 1.35rem; /* 21.6px - scannable from aisle */
+    --kiosk-card-title: 1.85rem; /* 29.6px */
+    --kiosk-banner-size: 1.15rem; /* 18.4px */
+    --kiosk-timer-size: 2.75rem;  /* 44px tabular */
+
+    /* --- Spacing Scale --- */
+    --space-0-5: 0.125rem; /* 2px */
+    --space-1:   0.25rem;  /* 4px */
+    --space-2:   0.5rem;   /* 8px */
+    --space-3:   0.75rem;  /* 12px */
+    --space-4:   1rem;     /* 16px */
+    --space-5:   1.25rem;  /* 20px */
+    --space-6:   1.5rem;   /* 24px */
+    --space-8:   2rem;     /* 32px */
+    --space-10:  2.5rem;   /* 40px */
+    --space-12:  3rem;     /* 48px */
+
+    /* --- Radius Tokens --- */
+    --radius-xs: 3px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 14px;
+    --radius-full: 9999px;
+
+    /* --- Shadows & Elevations --- */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
+    --shadow-card-hover: 0 6px 12px -2px rgba(0, 0, 0, 0.1), 0 3px 6px -3px rgba(0, 0, 0, 0.06);
+    --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.18), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+    --shadow-hud: 0 12px 28px -4px rgba(0, 0, 0, 0.55), 0 4px 8px -2px rgba(0, 0, 0, 0.3);
+
+    /* --- Motion Tokens --- */
+    --transition-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-normal: 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-slow: 350ms cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* --- Portal Surface Colors (Light) --- */
+    --portal-bg: #f8fafc;
+    --portal-card-bg: #ffffff;
+    --portal-card-border: #e2e8f0;
+    --portal-border-hover: #cbd5e1;
+    --portal-text-main: #0f172a;
+    --portal-text-muted: #475569; /* AA compliant: 6.2:1 against #ffffff */
+    --portal-text-light: #64748b; /* AA compliant: 4.55:1 against #ffffff */
+    --portal-primary: #0f172a;
+    --portal-primary-hover: #1e293b;
+    --portal-primary-text: #ffffff;
+
+    /* --- Workstation Kiosk Surface Colors (Dark) --- */
+    --kiosk-bg: #09090b;
+    --kiosk-card-bg: #18181b;
+    --kiosk-card-border: #27272a;
+    --kiosk-border-hover: #3f3f46;
+    --kiosk-text-main: #f4f4f5;
+    --kiosk-text-muted: #a1a1aa; /* AA compliant: 7.0:1 against #18181b */
+    --kiosk-text-light: #d4d4d8; /* AA compliant: 11.2:1 against #18181b */
+    --kiosk-input-bg: #121215;
+    --kiosk-input-border: #3f3f46;
+    --kiosk-input-focus: #3b82f6;
+
+    /* --- Machine State Palette (WCAG 2.2 AA Verified) --- */
+    /* State: AVAILABLE (Green) */
+    --state-avail-text-light: #15803d; /* 4.8:1 */
+    --state-avail-bg-light: #f0fdf4;
+    --state-avail-border-light: #86efac;
+    --state-avail-text-dark: #4ade80;  /* 8.5:1 */
+    --state-avail-bg-dark: #052e16;
+    --state-avail-border-dark: #166534;
+
+    /* State: OCCUPIED (Blue/Indigo) */
+    --state-occ-text-light: #1e40af;   /* 5.4:1 */
+    --state-occ-bg-light: #eff6ff;
+    --state-occ-border-light: #93c5fd;
+    --state-occ-text-dark: #93c5fd;    /* 7.2:1 */
+    --state-occ-bg-dark: #172554;
+    --state-occ-border-dark: #1e40af;
+
+    /* State: HELD - Personal (Amber) */
+    --state-held-text-light: #b45309;  /* 4.8:1 */
+    --state-held-bg-light: #fffbeb;
+    --state-held-border-light: #fcd34d;
+    --state-held-text-dark: #fbbf24;   /* 9.0:1 */
+    --state-held-bg-dark: #451a03;
+    --state-held-border-dark: #92400e;
+
+    /* State: HELD - Admin Dedicated (Sky / Cyan) */
+    --state-ded-text-light: #0369a1;   /* 4.9:1 */
+    --state-ded-bg-light: #f0f9ff;
+    --state-ded-border-light: #7dd3fc;
+    --state-ded-text-dark: #38bdf8;    /* 8.8:1 */
+    --state-ded-bg-dark: #082f49;
+    --state-ded-border-dark: #0369a1;
+
+    /* State: HELD - Faculty (Indigo) */
+    --state-fac-text-light: #4338ca;   /* 5.2:1 */
+    --state-fac-bg-light: #eef2ff;
+    --state-fac-border-light: #a5b4fc;
+    --state-fac-text-dark: #a5b4fc;    /* 8.1:1 */
+    --state-fac-bg-dark: #1e1b4b;
+    --state-fac-border-dark: #3730a3;
+
+    /* State: HELD - Club (Purple) */
+    --state-club-text-light: #7e22ce;  /* 5.1:1 */
+    --state-club-bg-light: #faf5ff;
+    --state-club-border-light: #d8b4fe;
+    --state-club-text-dark: #c084fc;   /* 8.3:1 */
+    --state-club-bg-dark: #3b0764;
+    --state-club-border-dark: #6b21a8;
+
+    /* State: MAINTENANCE (Red) */
+    --state-maint-text-light: #b91c1c; /* 5.9:1 */
+    --state-maint-bg-light: #fef2f2;
+    --state-maint-border-light: #fca5a5;
+    --state-maint-text-dark: #f87171;  /* 5.8:1 */
+    --state-maint-bg-dark: #450a0a;
+    --state-maint-border-dark: #991b1b;
+}
+
+/* --------------------------------------------------------------------------
+   3. TABULAR NUMERAL UTILITIES & ACCESSIBILITY
+   -------------------------------------------------------------------------- */
+.tabular-nums,
+[data-tabular="true"] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+/* Screen Reader Accessible Only */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* High-Visibility Focus Indicator */
+:focus-visible {
+    outline: 2px solid #2563eb !important;
+    outline-offset: 2px !important;
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

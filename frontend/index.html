@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LabTrack - University Computer Lab Management</title>
-    <!-- Vendored React 18 & Babel for fast local offline execution -->
+    <!-- Vendored React 18, Babel, Icons, & Tokens for fast local offline execution -->
+    <link rel="stylesheet" href="/static/css/tokens.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    <link rel="stylesheet" href="/static/css/portal.css">
     <script src="/static/js/react.production.min.js"></script>
     <script src="/static/js/react-dom.production.min.js"></script>
     <script src="/static/js/babel.min.js"></script>
-    <link rel="stylesheet" href="/static/css/portal.css">
+    <script src="/static/js/icons.js"></script>
     <!-- Animation & Micro-interaction Engines (Anime.js & Motion.dev) -->
     <script src="/static/js/anime.min.js"></script>
     <script src="/static/js/motion.umd.js"></script>
@@ -18,6 +21,7 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
+        const Icon = window.Icon;
 
         function App() {
             // Authentication state
@@ -287,36 +291,36 @@
                         {/* Navigation Tabs */}
                         <nav>
                             <button className={`tab-btn ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
-                                🖥️ Live Workstations
+                                <Icon name="monitor" size={15} /> <span>Live Workstations</span>
                             </button>
                             {role !== 'faculty' && (
                                 <button className={`tab-btn ${activeTab === 'booking' ? 'active' : ''}`} onClick={() => setActiveTab('booking')}>
-                                    📅 Book Workstation
+                                    <Icon name="calendar" size={15} /> <span>Book Workstation</span>
                                 </button>
                             )}
                             {role !== 'faculty' && (
                                 <button className={`tab-btn ${activeTab === 'reservations' ? 'active' : ''}`} onClick={() => setActiveTab('reservations')}>
-                                    🎟️ My Reservations
+                                    <Icon name="ticket" size={15} /> <span>My Reservations</span>
                                 </button>
                             )}
                             {(role === 'faculty' || role === 'admin') && (
                                 <>
                                     <button className={`tab-btn ${activeTab === 'faculty' ? 'active' : ''}`} onClick={() => setActiveTab('faculty')}>
-                                        🎓 Faculty Extra Labs
+                                        <Icon name="graduation-cap" size={15} /> <span>Faculty Extra Labs</span>
                                     </button>
                                     <button className={`tab-btn ${activeTab === 'sessions' ? 'active' : ''}`} onClick={() => setActiveTab('sessions')}>
-                                        📋 Scheduled Lab Sessions
+                                        <Icon name="clipboard-list" size={15} /> <span>Scheduled Lab Sessions</span>
                                     </button>
                                 </>
                             )}
                             {(role === 'club_lead' || role === 'admin') && (
                                 <button className={`tab-btn ${activeTab === 'clubs' ? 'active' : ''}`} onClick={() => setActiveTab('clubs')}>
-                                    ⚡ Technical Clubs
+                                    <Icon name="zap" size={15} /> <span>Technical Clubs</span>
                                 </button>
                             )}
                             {role === 'admin' && (
                                 <button className={`tab-btn ${activeTab === 'admin' ? 'active' : ''}`} onClick={() => setActiveTab('admin')}>
-                                    ⚙️ Admin Operations
+                                    <Icon name="settings" size={15} /> <span>Admin Operations</span>
                                 </button>
                             )}
                         </nav>
@@ -490,7 +494,7 @@
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-tag stat-tag-avail">🟢 WALK-IN FREE</span>
+                                <span className="stat-tag stat-tag-avail"><Icon name="check-circle" size={12} /> WALK-IN FREE</span>
                                 <span className="stat-pct">{pctAvail}%</span>
                             </div>
                             <div className="stat-value">{availCount}<span className="stat-unit">PCs</span></div>
@@ -499,7 +503,7 @@
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-tag stat-tag-held">🔒 HELD / RESERVED</span>
+                                <span className="stat-tag stat-tag-held"><Icon name="clock" size={12} /> HELD / RESERVED</span>
                                 <span className="stat-pct">{pctHeld}%</span>
                             </div>
                             <div className="stat-value">{heldCount}<span className="stat-unit">PCs</span></div>
@@ -508,7 +512,7 @@
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-tag stat-tag-occ">⚡ IN ACTIVE USE</span>
+                                <span className="stat-tag stat-tag-occ"><Icon name="cpu" size={12} /> IN ACTIVE USE</span>
                                 <span className="stat-pct">{pctOcc}%</span>
                             </div>
                             <div className="stat-value">{occCount}<span className="stat-unit">PCs</span></div>
@@ -524,7 +528,7 @@
                                     Real-time workstation status &bull; {availCount} Available &bull; {heldCount} Reserved &bull; {occCount} Occupied
                                 </p>
                             </div>
-                            <button className="btn btn-outline btn-sm" onClick={onRefresh}>🔄 Refresh Grid</button>
+                            <button className="btn btn-outline btn-sm" onClick={onRefresh}><Icon name="refresh-cw" size={13} /> Refresh Grid</button>
                         </div>
 
                         {/* Lab filter chips */}
@@ -566,7 +570,7 @@
                                             {/* Status Details */}
                                             {pc.state === 'AVAILABLE' && (
                                                 <div className="pc-info-box">
-                                                    <div className="pc-info-title" style={{ color: 'var(--status-avail-text)' }}>🟢 Free for Walk-in</div>
+                                                    <div className="pc-info-title" style={{ color: 'var(--status-avail-text)' }}>Free for Walk-in</div>
                                                     <div className="pc-info-text">Any student can sit and log in immediately.</div>
                                                 </div>
                                             )}
@@ -574,9 +578,9 @@
                                             {pc.state === 'HELD' && held && (
                                                 <div className="pc-info-box" style={{ backgroundColor: 'var(--status-held-bg)', borderColor: 'var(--status-held-border)' }}>
                                                     <div className="pc-info-title" style={{ color: 'var(--status-held-text)' }}>
-                                                        {held.hold_type === 'club' ? '⚡ Club Workshop' :
-                                                         held.hold_type === 'faculty' ? '🎓 Faculty Session' :
-                                                         '🔒 Reserved'}
+                                                        {held.hold_type === 'club' ? 'Club Workshop' :
+                                                         held.hold_type === 'faculty' ? 'Faculty Session' :
+                                                         'Reserved'}
                                                     </div>
                                                     <div className="pc-info-text">
                                                         <strong>Reserver:</strong> {held.who}<br />
@@ -592,14 +596,14 @@
 
                                             {pc.state === 'HELD' && !held && (
                                                 <div className="pc-info-box" style={{ backgroundColor: 'var(--status-held-bg)', borderColor: 'var(--status-held-border)' }}>
-                                                    <div className="pc-info-title" style={{ color: 'var(--status-held-text)' }}>🔒 Reserved</div>
+                                                    <div className="pc-info-title" style={{ color: 'var(--status-held-text)' }}><Icon name="clock" size={14} /> Reserved</div>
                                                     <div className="pc-info-text">Workstation held for scheduled academic or club session.</div>
                                                 </div>
                                             )}
 
                                             {pc.state === 'OCCUPIED' && occ && (
                                                 <div className="pc-info-box" style={{ backgroundColor: 'var(--status-occ-bg)', borderColor: 'var(--status-occ-border)' }}>
-                                                    <div className="pc-info-title" style={{ color: 'var(--status-occ-text)' }}>⚡ In Active Use</div>
+                                                    <div className="pc-info-title" style={{ color: 'var(--status-occ-text)' }}><Icon name="cpu" size={14} /> In Active Use</div>
                                                     <div className="pc-info-text">
                                                         <strong>User:</strong> {occ.student_name} ({occ.roll_no})<br />
                                                         <strong>Activity:</strong> {occ.purpose}
@@ -612,14 +616,14 @@
 
                                             {pc.state === 'OCCUPIED' && !occ && (
                                                 <div className="pc-info-box" style={{ backgroundColor: 'var(--status-occ-bg)', borderColor: 'var(--status-occ-border)' }}>
-                                                    <div className="pc-info-title" style={{ color: 'var(--status-occ-text)' }}>⚡ In Active Use</div>
+                                                    <div className="pc-info-title" style={{ color: 'var(--status-occ-text)' }}><Icon name="cpu" size={14} /> In Active Use</div>
                                                     <div className="pc-info-text">Session actively running on this workstation.</div>
                                                 </div>
                                             )}
 
                                             {pc.state === 'MAINTENANCE' && (
                                                 <div className="pc-info-box">
-                                                    <div className="pc-info-title" style={{ color: 'var(--status-maint-text)' }}>⚠️ Maintenance</div>
+                                                    <div className="pc-info-title" style={{ color: 'var(--status-maint-text)' }}><Icon name="alert-triangle" size={14} /> Maintenance</div>
                                                     <div className="pc-info-text">{pc.maintenance_reason || 'Hardware diagnostics in progress.'}</div>
                                                 </div>
                                             )}
@@ -686,7 +690,7 @@
             if (currentUser && currentUser.role === 'faculty') {
                 return (
                     <div className="card" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>👨‍🏫</div>
+                        <div style={{ marginBottom: '0.75rem', color: 'var(--text-muted)' }}><Icon name="graduation-cap" size={44} /></div>
                         <h2 className="card-title" style={{ marginBottom: '0.5rem' }}>Faculty Account Notice</h2>
                         <p className="card-subtitle" style={{ maxWidth: '520px', margin: '0 auto 1.5rem auto' }}>
                             Faculty members do not reserve individual personal workstations. To allocate computer labs for student cohorts, please use the Faculty Extra Labs portal.
@@ -846,7 +850,7 @@
             if (!token || !currentUser) {
                 return (
                     <div className="card" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔒</div>
+                        <div style={{ marginBottom: '0.75rem', color: 'var(--text-muted)' }}><Icon name="lock" size={44} /></div>
                         <h2 className="card-title" style={{ marginBottom: '0.5rem' }}>Authentication Required</h2>
                         <p className="card-subtitle" style={{ maxWidth: '480px', margin: '0 auto 1.5rem auto' }}>
                             Please sign in with your student account to view or manage your personal workstation bookings.
@@ -859,7 +863,7 @@
             if (currentUser && currentUser.role === 'faculty') {
                 return (
                     <div className="card" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-                        <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>👨‍🏫</div>
+                        <div style={{ marginBottom: '0.75rem', color: 'var(--text-muted)' }}><Icon name="graduation-cap" size={44} /></div>
                         <h2 className="card-title" style={{ marginBottom: '0.5rem' }}>Personal Workstation Reservations</h2>
                         <p className="card-subtitle" style={{ maxWidth: '520px', margin: '0 auto 1.5rem auto' }}>
                             Individual workstation reservations are for students. To view or conclude scheduled cohort practical lab sessions, visit the Faculty Extra Labs tab.
@@ -878,7 +882,7 @@
                         <div className="stats-grid">
                             <div className="stat-card">
                                 <div className="stat-header">
-                                    <span className="stat-tag stat-tag-held">🔒 ACTIVE RESERVATIONS</span>
+                                    <span className="stat-tag stat-tag-held"><Icon name="clock" size={12} /> ACTIVE RESERVATIONS</span>
                                     <span className="stat-pct">{activeRes > 0 ? 'READY' : 'NONE'}</span>
                                 </div>
                                 <div className="stat-value">{activeRes}<span className="stat-unit">Slots</span></div>
@@ -887,7 +891,7 @@
 
                             <div className="stat-card">
                                 <div className="stat-header">
-                                    <span className="stat-tag stat-tag-avail">🟢 COMPLETED / PAST</span>
+                                    <span className="stat-tag stat-tag-avail"><Icon name="check-circle" size={12} /> COMPLETED / PAST</span>
                                     <span className="stat-pct">{pastRes} RECORDED</span>
                                 </div>
                                 <div className="stat-value">{pastRes}<span className="stat-unit">Sessions</span></div>
@@ -911,7 +915,7 @@
                             <h2 className="card-title">My Workstation Bookings</h2>
                             <p className="card-subtitle">Personal reservations linked exclusively to student account ({currentUser.roll_no}).</p>
                         </div>
-                        <button className="btn btn-outline btn-sm" onClick={onRefresh}>🔄 Refresh</button>
+                        <button className="btn btn-outline btn-sm" onClick={onRefresh}><Icon name="refresh-cw" size={13} /> Refresh</button>
                     </div>
 
                     {loading ? (
@@ -977,7 +981,7 @@
             if (!token || !currentUser || (currentUser.role !== 'faculty' && currentUser.role !== 'admin')) {
                 return (
                     <div className="card" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '0.75rem', color: 'var(--text-muted)' }}>🏛️</div>
+                        <div style={{ marginBottom: '0.75rem', color: 'var(--text-muted)' }}><Icon name="building" size={40} /></div>
                         <h2 className="card-title" style={{ marginBottom: '0.5rem' }}>Faculty Privileges Required</h2>
                         <p className="card-subtitle" style={{ maxWidth: '480px', margin: '0 auto 1.5rem auto' }}>
                             Please sign in with an academic faculty or laboratory administrator account to dispatch cohort workstation allocations.
@@ -1420,7 +1424,7 @@
                             {/* Overcapacity Warning */}
                             {parseInt(studentCount) > campusTotalPcs && (
                                 <div className="overcap-banner">
-                                    <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center' }}><Icon name="alert-triangle" size={18} /></span>
                                     <span>
                                         <strong>Cohort strength ({studentCount}) exceeds campus capacity ({campusTotalPcs} PCs).</strong><br />
                                         All available {campusTotalPcs} workstations across all {labs.length} laboratories will be reserved.
@@ -1452,7 +1456,7 @@
             if (!token || !currentUser || (currentUser.role !== 'faculty' && currentUser.role !== 'admin')) {
                 return (
                     <div className="card" style={{ textAlign: 'center', padding: '3.5rem 2rem' }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '0.75rem', color: 'var(--text-muted)' }}>🏛️</div>
+                        <div style={{ marginBottom: '0.75rem', color: 'var(--text-muted)' }}><Icon name="building" size={40} /></div>
                         <h2 className="card-title" style={{ marginBottom: '0.5rem' }}>Faculty Privileges Required</h2>
                         <p className="card-subtitle" style={{ maxWidth: '480px', margin: '0 auto 1.5rem auto' }}>
                             Please sign in with an academic faculty or laboratory administrator account to view practical lab sessions.
@@ -1613,7 +1617,7 @@
 
                         {filteredSessions.length === 0 ? (
                             <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: '#64748b' }}>
-                                <div style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>📋</div>
+                                <div style={{ marginBottom: '0.5rem', color: 'var(--text-muted)' }}><Icon name="clipboard-list" size={36} /></div>
                                 <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.25rem' }}>No practical lab sessions found</div>
                                 <p style={{ fontSize: '0.82rem', maxWidth: '380px', margin: '0 auto 1.25rem auto' }}>
                                     {sessions.length === 0 ? "No cohort practical lab sessions have been scheduled yet." : "No sessions match the selected filter criteria."}
@@ -1828,7 +1832,7 @@
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-tag stat-tag-avail">🟢 APPROVED WORKSHOPS</span>
+                                <span className="stat-tag stat-tag-avail"><Icon name="check-circle" size={12} /> APPROVED WORKSHOPS</span>
                                 <span className="stat-pct">{approvedCount} ACTIVE</span>
                             </div>
                             <div className="stat-value">{approvedCount}<span className="stat-unit">Events</span></div>
@@ -1837,7 +1841,7 @@
 
                         <div className="stat-card">
                             <div className="stat-header">
-                                <span className="stat-tag stat-tag-held">🔒 PENDING REVIEW</span>
+                                <span className="stat-tag stat-tag-held"><Icon name="clock" size={12} /> PENDING REVIEW</span>
                                 <span className="stat-pct">{pendingCount} QUEUED</span>
                             </div>
                             <div className="stat-value">{pendingCount}<span className="stat-unit">Proposals</span></div>
@@ -1929,7 +1933,7 @@
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                 <button type="submit" className="btn" disabled={submitting}>
-                                    {submitting ? 'Submitting...' : '🚀 Submit Event Proposal'}
+                                    {submitting ? 'Submitting...' : <><Icon name="zap" size={14} /> Submit Event Proposal</>}
                                 </button>
                             </div>
                         </form>
@@ -1942,7 +1946,7 @@
                                 <h3 className="card-title">Technical Club Events Roster</h3>
                                 <p className="card-subtitle">Proposed and approved workshops across college laboratories.</p>
                             </div>
-                            <button className="btn btn-outline btn-sm" onClick={onRefresh}>🔄 Refresh</button>
+                            <button className="btn btn-outline btn-sm" onClick={onRefresh}><Icon name="refresh-cw" size={13} /> Refresh</button>
                         </div>
 
                         {events.length === 0 ? (
@@ -1995,14 +1999,14 @@
                                                                 onClick={() => fetchRoster(ev.id, ev.title)}
                                                                 title="View attendees who checked into workstations"
                                                             >
-                                                                👥 Participants
+                                                                Participants
                                                             </button>
                                                             {canEnd ? (
                                                                 <button
                                                                     className="btn btn-danger btn-sm"
                                                                     onClick={() => handleEndEvent(ev.id, ev.title)}
                                                                 >
-                                                                    🛑 End Event
+                                                                    End Event
                                                                 </button>
                                                             ) : (
                                                                 <span style={{ color: '#94a3b8', fontSize: '0.8rem', alignSelf: 'center' }}>Concluded</span>
@@ -2128,8 +2132,11 @@
             const [showExtendModal, setShowExtendModal] = useState(false);
             const [extendingRes, setExtendingRes] = useState(null);
             const [extendDays, setExtendDays] = useState(5);
-            const [extendReason, setExtendReason] = useState('Research paper revisions & model evaluation deadline');
             const [submittingExtend, setSubmittingExtend] = useState(false);
+
+            // Master Fleet Reset Confirmation Modal State (AUD-10)
+            const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+            const [resetConfirmText, setResetConfirmText] = useState('');
 
             // Admin tab & fleet filter states
             const [eventTab, setEventTab] = useState('pending'); // 'pending' | 'active'
@@ -2352,8 +2359,14 @@
                 }
             };
 
-            const handleReleaseAll = async () => {
-                if (!confirm("🚨 MASTER SYSTEM RESET:\n\nAre you sure you want to release ALL workstation holds, terminate active student sessions, conclude all club and faculty sessions, and return ALL campus workstations to AVAILABLE walk-in mode?")) return;
+            const handleReleaseAll = () => {
+                setResetConfirmText('');
+                setShowResetConfirmModal(true);
+            };
+
+            const executeReleaseAll = async () => {
+                setShowResetConfirmModal(false);
+                setResetConfirmText('');
                 try {
                     const res = await fetch('/api/admin/system/release-all', {
                         method: 'POST',
@@ -2548,7 +2561,7 @@
                             </p>
                         </div>
                         <button className="btn btn-danger" onClick={handleReleaseAll}>
-                            Master Reset Fleet to Walk-in Mode
+                            <Icon name="alert-octagon" size={15} /> <span>Master Reset Fleet to Walk-in Mode</span>
                         </button>
                     </div>
 
@@ -2598,7 +2611,7 @@
                             if (filtered.length === 0) {
                                 return (
                                     <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
-                                        <div style={{ fontSize: '1.8rem', marginBottom: '0.4rem' }}>💻</div>
+                                        <div style={{ marginBottom: '0.4rem', color: 'var(--text-muted)' }}><Icon name="monitor" size={36} /></div>
                                         <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.25rem' }}>No Dedicated Reservations Under This Filter</div>
                                         <div style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>No campus workstations are currently locked for individual student reservations.</div>
                                         <button className="btn btn-outline btn-sm" onClick={() => { resetModal(); setShowReserveModal(true); }}>
@@ -2653,17 +2666,17 @@
                                                         <td>
                                                             {res.status === 'HELD' && (
                                                                 <span className="status-badge badge-HELD">
-                                                                    🔒 HELD ({res.remaining_display || (remMins > 0 ? `${remMins}m left` : 'Awaiting Student')})
+                                                                    <><Icon name="shield-lock" size={12} /> HELD</> ({res.remaining_display || (remMins > 0 ? `${remMins}m left` : 'Awaiting Student')})
                                                                 </span>
                                                             )}
                                                             {res.status === 'ACTIVE' && (
                                                                 <span className="status-badge badge-AVAILABLE">
-                                                                    🟢 ACTIVE • In Session ({res.remaining_display || `${remMins}m left`})
+                                                                    <><Icon name="check-circle" size={12} /> ACTIVE • In Session</> ({res.remaining_display || `${remMins}m left`})
                                                                 </span>
                                                             )}
                                                             {res.status === 'PENDING' && (
                                                                 <span className="status-badge" style={{ background: '#f0fdf4', color: '#0284c7', borderColor: '#bae6fd' }}>
-                                                                    ⏳ SCHEDULED
+                                                                    <><Icon name="clock" size={12} /> SCHEDULED</>
                                                                 </span>
                                                             )}
                                                             {res.status === 'COMPLETED' && (
@@ -3082,7 +3095,7 @@
                                             <span>Student Roll Number or Email *</span>
                                             {selectedStudent && (
                                                 <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.75rem' }}>
-                                                    ✓ {selectedStudent.name} ({selectedStudent.roll_no})
+                                                    <><Icon name="check-circle" size={14} /> {selectedStudent.name}</> ({selectedStudent.roll_no})
                                                 </span>
                                             )}
                                         </label>
@@ -3136,8 +3149,8 @@
                                                 value={allocMode}
                                                 onChange={e => setAllocMode(e.target.value)}
                                             >
-                                                <option value="auto">⚡ Auto-Assign Best Available PC</option>
-                                                <option value="specific">🎯 Select Specific Workstation</option>
+                                                <option value="auto">Auto-Assign Best Available PC</option>
+                                                <option value="specific">Select Specific Workstation</option>
                                             </select>
                                         </div>
                                     </div>
@@ -3155,7 +3168,7 @@
                                                     .filter(w => !selectedLabId || String(w.lab_id) === String(selectedLabId))
                                                     .map(w => (
                                                         <option key={w.id} value={w.id} disabled={w.state === 'MAINTENANCE'}>
-                                                            {w.hostname} ({w.lab_name}) — [{w.state}]{w.has_gpu ? ' ⚡ GPU' : ''}
+                                                            {w.hostname} ({w.lab_name}) — [{w.state}]{w.has_gpu ? ' • GPU' : ''}
                                                         </option>
                                                     ))}
                                             </select>
@@ -3207,13 +3220,13 @@
                                             value={purpose}
                                             onChange={e => setPurpose(e.target.value)}
                                         >
-                                            <option value="Academic Research Work / Thesis">🔬 Academic Research Work / Thesis</option>
-                                            <option value="Final Year Capstone Project">🎓 Final Year Capstone Project</option>
-                                            <option value="Department Sponsored Research">💻 Department Sponsored Research</option>
-                                            <option value="Research Fellowship / Internship">🚀 Research Fellowship / Internship</option>
-                                            <option value="Competitive Hackathon / Innovation Lab">🏆 Competitive Hackathon / Innovation Lab</option>
-                                            <option value="Remedial Practical Examination">📝 Remedial Practical Examination</option>
-                                            <option value="Supervised Academic Lab Session">⚖️ Supervised Academic Lab Session</option>
+                                            <option value="Academic Research Work / Thesis">Academic Research Work / Thesis</option>
+                                            <option value="Final Year Capstone Project">Final Year Capstone Project</option>
+                                            <option value="Department Sponsored Research">Department Sponsored Research</option>
+                                            <option value="Research Fellowship / Internship">Research Fellowship / Internship</option>
+                                            <option value="Competitive Hackathon / Innovation Lab">Competitive Hackathon / Innovation Lab</option>
+                                            <option value="Remedial Practical Examination">Remedial Practical Examination</option>
+                                            <option value="Supervised Academic Lab Session">Supervised Academic Lab Session</option>
                                         </select>
                                     </div>
 
@@ -3242,6 +3255,16 @@
                                         <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', paddingLeft: '1.6rem' }}>
                                             If checked, any student currently using the selected machine in walk-in mode will have their session concluded gracefully, and the machine will immediately lock for the reserved student.
                                         </div>
+                                        {forcePreempt && (
+                                            <div className="conflict-card" style={{ marginTop: '0.65rem', marginBottom: 0, borderColor: '#fca5a5' }}>
+                                                <div className="conflict-card-header" style={{ padding: '0.45rem 0.65rem', fontSize: '0.78rem' }}>
+                                                    <Icon name="alert-triangle" size={14} /> Immediate Session Termination Warning
+                                                </div>
+                                                <div className="conflict-card-body" style={{ padding: '0.55rem 0.65rem', fontSize: '0.76rem', color: '#991b1b' }}>
+                                                    Allocating with Force Preempt will immediately terminate any active student session on the machine. Please ensure the student is notified to save their work.
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
@@ -3249,7 +3272,7 @@
                                             Cancel
                                         </button>
                                         <button type="submit" className="btn btn-primary" disabled={submittingDedicated}>
-                                            {submittingDedicated ? 'Allocating & Locking Workstation...' : '🔒 Confirm & Lock Workstation'}
+                                            {submittingDedicated ? 'Allocating & Locking Workstation...' : <><Icon name="shield-lock" size={15} /> Confirm & Lock Workstation</>}
                                         </button>
                                     </div>
                                 </form>
@@ -3343,6 +3366,66 @@
                             </div>
                         </div>
                     )}
+
+                    {/* Master Fleet Reset Accessible Confirmation Modal (AUD-10) */}
+                    {showResetConfirmModal && (
+                        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
+                            <div className="modal-container" style={{ maxWidth: '520px' }}>
+                                <div className="confirm-destructive-header">
+                                    <div className="confirm-destructive-icon">
+                                        <Icon name="alert-octagon" size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 id="resetModalTitle" style={{ fontSize: '1.05rem', fontWeight: 700, color: '#991b1b', margin: 0 }}>
+                                            Confirm Master Fleet Reset
+                                        </h3>
+                                        <div style={{ fontSize: '0.78rem', color: '#b91c1c', marginTop: '2px' }}>
+                                            High-Impact Emergency Administrative Action
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="modal-body" style={{ fontSize: '0.85rem', color: 'var(--neutral-700)', lineHeight: 1.5 }}>
+                                    <p style={{ marginBottom: '0.75rem' }}>
+                                        You are about to initiate a <strong>Master Reset across all 45 campus workstations</strong>. This operation will:
+                                    </p>
+                                    <ul style={{ paddingLeft: '1.25rem', marginBottom: '1rem', color: '#991b1b', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                                        <li>Immediately release ALL student advance and dedicated holds.</li>
+                                        <li>Terminate active cgroups sandboxes and log out any working students.</li>
+                                        <li>Conclude all active faculty lab sessions and club event workshops.</li>
+                                        <li>Restore all fleet machines to AVAILABLE walk-in mode.</li>
+                                    </ul>
+                                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.75rem', fontSize: '0.78rem', color: '#64748b' }}>
+                                        Type <strong>RESET FLEET</strong> below to enable the confirmation button.
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={resetConfirmText}
+                                        onChange={e => setResetConfirmText(e.target.value)}
+                                        placeholder="Type RESET FLEET"
+                                        style={{ marginTop: '0.65rem' }}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => { setShowResetConfirmModal(false); setResetConfirmText(''); }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        disabled={resetConfirmText.trim().toUpperCase() !== 'RESET FLEET'}
+                                        onClick={executeReleaseAll}
+                                    >
+                                        <Icon name="alert-octagon" size={14} /> Confirm Emergency Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -3415,16 +3498,16 @@
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                                 <button type="button" className="quick-user-btn" onClick={() => quickLogin('admin', 'admin123')}>
-                                    <strong>⚙️ Administrator</strong><br />admin
+                                    <strong>Administrator</strong><br />admin
                                 </button>
                                 <button type="button" className="quick-user-btn" onClick={() => quickLogin('faculty01', 'faculty123')}>
-                                    <strong>👨‍🏫 Dr. Alan Turing</strong><br />faculty01 (Faculty)
+                                    <strong>Dr. Alan Turing</strong><br />faculty01 (Faculty)
                                 </button>
                                 <button type="button" className="quick-user-btn" onClick={() => quickLogin('STU001', 'stu123')}>
-                                    <strong>🎓 Alice Johnson</strong><br />STU001 (Student)
+                                    <strong>Alice Johnson</strong><br />STU001 (Student)
                                 </button>
                                 <button type="button" className="quick-user-btn" onClick={() => quickLogin('124cs0021', 'stu123')}>
-                                    <strong>🚀 GDG Club Lead</strong><br />124cs0021
+                                    <strong>GDG Club Lead</strong><br />124cs0021
                                 </button>
                             </div>
                         </div>

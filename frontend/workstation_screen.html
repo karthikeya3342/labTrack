@@ -4,15 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LabTrack Workstation Greeter & Lock Screen</title>
+    <link rel="stylesheet" href="/static/css/tokens.css">
     <link rel="stylesheet" href="/static/css/workstation.css">
     <script src="/static/js/anime.min.js"></script>
+    <script src="/static/js/icons.js"></script>
 </head>
 <body>
 
     <!-- TOP STATUS BAR -->
-    <div class="top-bar">
+    <header class="top-bar">
         <div class="host-title">
-            <img src="/static/iiitk.jpeg" alt="IIITDM Kurnool" class="institution-emblem" />
+            <img src="/static/iiitk.jpeg" alt="IIITDM Kurnool Emblem" class="institution-emblem" />
             <div class="host-info">
                 <div class="host-badge-row">
                     <span class="host-badge" id="hostBadge">COMP-PC-01</span>
@@ -30,19 +32,21 @@
                 <span class="indicator-dot"></span>
                 <span>Campus Internet Locked (Captive Portal)</span>
             </div>
-            <button class="btn-power" onclick="handlePowerOff()" title="Shut Down Workstation">
-                ⏻ Shut Down PC
+            <button type="button" class="btn-power" onclick="handlePowerOff()" title="Shut Down Workstation">
+                <span id="powerIconWrap"></span>
+                <span>Shut Down PC</span>
             </button>
         </div>
-    </div>
+    </header>
 
     <!-- MAIN KIOSK CONTAINER -->
-    <div class="kiosk-container">
+    <main class="kiosk-container" role="main">
+        <h1 class="sr-only">LabTrack Workstation Kiosk &amp; Lock Screen</h1>
         <div class="kiosk-card" id="kioskCard">
             
             <!-- Institutional Header Block -->
             <div class="inst-header-block">
-                <img src="/static/iiitk.jpeg" alt="IIITDM Kurnool" class="inst-header-logo" />
+                <img src="/static/iiitk.jpeg" alt="IIITDM Kurnool Crest" class="inst-header-logo" />
                 <div class="inst-header-text">
                     <div class="inst-header-title">IIITDM KURNOOL</div>
                     <div class="inst-header-sub">Central Computing &amp; Academic Laboratories</div>
@@ -50,8 +54,8 @@
             </div>
 
             <!-- State Banner -->
-            <div id="stateBadge" class="state-banner banner-AVAILABLE">
-                🟢 Workstation Available
+            <div id="stateBadge" class="state-banner banner-AVAILABLE" role="status" aria-live="polite">
+                <span>Workstation Available</span>
             </div>
 
             <!-- UNIFIED LOGIN VIEW -->
@@ -68,8 +72,8 @@
 
                 <!-- 1b. Faculty Session Reserved Context -->
                 <div id="facultyHeldContext" class="context-box" style="display: none; text-align: center;">
-                    <div style="font-size: 2.2rem; margin-bottom: 0.35rem;">🎓</div>
-                    <div class="club-category-tag" style="color: #4ade80;" id="facultyCourseHeader">OPERATING SYSTEMS LAB</div>
+                    <div id="facultyIconSlot" style="margin-bottom: 0.35rem; color: #a5b4fc;"></div>
+                    <div class="club-category-tag" style="color: #a5b4fc;" id="facultyCourseHeader">OPERATING SYSTEMS LAB</div>
                     <h2 class="kiosk-title" id="facultyBatchTitle" style="margin: 0.35rem 0 0.5rem 0; font-size: 1.35rem;">3rd Year CSE</h2>
                     <p class="kiosk-sub" id="facultyInstructorSubtitle" style="margin-bottom: 0;">Session conducted by <strong>Faculty</strong>. Enrolled batch students can log in to begin practical work.</p>
                 </div>
@@ -78,11 +82,11 @@
                 <div id="individualHeldContext" class="context-box" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
                         <span id="heldTagTitle" style="font-size: 0.85rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.04em;">Assigned Booking</span>
-                        <span style="font-size: 0.72rem; color: var(--text-muted);">Strict Allocation</span>
+                        <span style="font-size: 0.72rem; color: var(--kiosk-text-muted);">Strict Allocation</span>
                     </div>
 
-                    <div id="heldPurposeBadge" style="display: none; font-size: 0.78rem; font-weight: 700; color: #059669; background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.25); border-radius: 6px; padding: 0.35rem 0.65rem; margin-bottom: 0.85rem; line-height: 1.4;">
-                        <span id="heldPurposeText">🔬 Academic Research Work / Thesis</span>
+                    <div id="heldPurposeBadge" style="display: none; font-size: 0.78rem; font-weight: 700; color: #38bdf8; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.28); border-radius: 6px; padding: 0.35rem 0.65rem; margin-bottom: 0.85rem; line-height: 1.4;">
+                        <span id="heldPurposeText">Academic Research Work / Thesis</span>
                     </div>
 
                     <div class="reserved-row">
@@ -104,11 +108,11 @@
 
                     <div class="countdown-box">
                         <div class="countdown-label" id="heldCountdownLabel">Hold Grace Period Remaining</div>
-                        <div class="countdown-timer" id="graceCountdown">14:59</div>
+                        <div class="countdown-timer tabular-nums" id="graceCountdown" aria-live="off">14:59</div>
                     </div>
 
                     <div id="heldAdminNotice" style="display: none; font-size: 0.76rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 6px; padding: 0.45rem 0.65rem; margin-top: 0.65rem; line-height: 1.4;">
-                        🔒 <strong>Admin Dedicated Workstation:</strong> Exclusively locked for this student. Machine will preserve your allocation even across logouts until the period ends.
+                        <strong>Admin Dedicated Workstation:</strong> Exclusively locked for this student. Machine will preserve your allocation even across logouts until the period ends.
                     </div>
                 </div>
 
@@ -121,14 +125,17 @@
                 <!-- SINGLE UNIFIED AUTHENTICATION FORM -->
                 <form id="unifiedAuthForm" onsubmit="handleUnlock(event)">
                     <div class="form-group">
-                        <label id="loginRollLabel">Student Roll Number</label>
-                        <input type="text" id="loginRollInput" placeholder="e.g. STU001 or 21CS045" required autocomplete="off" />
+                        <label id="loginRollLabel" for="loginRollInput">Student Roll Number</label>
+                        <input type="text" id="loginRollInput" placeholder="e.g. STU001 or 21CS045" required autocomplete="off" autofocus />
                     </div>
                     <div class="form-group">
-                        <label>Password</label>
+                        <label for="loginPwInput">Password</label>
                         <input type="password" id="loginPwInput" placeholder="Enter password" required />
                     </div>
-                    <button type="submit" class="btn-unlock" id="loginSubmitBtn">🔓 Unlock Workstation</button>
+                    <button type="submit" class="btn-unlock" id="loginSubmitBtn">
+                        <span id="unlockBtnIcon"></span>
+                        <span id="unlockBtnLabel">Unlock Workstation</span>
+                    </button>
                 </form>
             </div>
 
@@ -148,26 +155,33 @@
                     </div>
                     <div class="reserved-row">
                         <span class="reserved-label">Session ID:</span>
-                        <span class="reserved-value" id="occSessionId">#1</span>
+                        <span class="reserved-value tabular-nums" id="occSessionId">#1</span>
                     </div>
 
                     <div class="metrics-grid">
                         <div class="metric-cell">
-                            <div class="metric-num" id="occCpuLoad">4.2%</div>
+                            <div class="metric-num tabular-nums" id="occCpuLoad">4.2%</div>
                             <div class="metric-lbl">CPU Usage</div>
                         </div>
                         <div class="metric-cell">
-                            <div class="metric-num" id="occMemLoad">18.5%</div>
+                            <div class="metric-num tabular-nums" id="occMemLoad">18.5%</div>
                             <div class="metric-lbl">RAM Usage</div>
                         </div>
                     </div>
                 </div>
 
-                <button class="btn-desktop" onclick="minimizeToFloatingBar()">💻 Minimize &amp; Open Linux Desktop</button>
-                <div style="margin: 0.75rem 0; font-size: 0.76rem; color: var(--text-muted); line-height: 1.4;">
-                    💡 <em>Shortcut: Press <strong>Super (Windows key)</strong> or <strong>Ctrl+Alt+T</strong> to launch Terminal & Apps anytime.</em>
+                <button type="button" class="btn-desktop" onclick="minimizeToFloatingBar()">
+                    <span id="desktopBtnIcon"></span>
+                    <span>Minimize &amp; Open Linux Desktop</span>
+                </button>
+                <div style="margin: 0.75rem 0; font-size: 0.76rem; color: var(--kiosk-text-muted); line-height: 1.4; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                    <span id="tipIconSlot"></span>
+                    <span>Shortcut: Press <strong>Super (Windows key)</strong> or <strong>Ctrl+Alt+T</strong> to launch Terminal &amp; Apps anytime.</span>
                 </div>
-                <button class="btn-logout" onclick="handleLogout()">🔒 Logout &amp; Re-lock Workstation</button>
+                <button type="button" class="btn-logout" onclick="handleLogout()">
+                    <span id="logoutBtnIcon"></span>
+                    <span>Logout &amp; Re-lock Workstation</span>
+                </button>
             </div>
 
             <!-- MAINTENANCE OFFLINE VIEW -->
@@ -177,16 +191,17 @@
             </div>
 
             <!-- STATUS MESSAGE BOX -->
-            <div id="messageBox" class="msg-box"></div>
+            <div id="messageBox" class="msg-box" role="alert"></div>
 
             <!-- DISCRETE POWER BUTTON IN FOOTER OF CARD -->
-            <div style="margin-top: 1.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1.15rem;">
+            <div style="margin-top: 1.5rem; border-top: 1px solid var(--neutral-800); padding-top: 1.15rem;">
                 <button type="button" class="btn-power-discrete" onclick="handlePowerOff()" title="Shut down workstation immediately">
-                    ⏻ Shut Down Workstation
+                    <span id="discretePowerIconSlot"></span>
+                    <span>Shut Down Workstation</span>
                 </button>
             </div>
         </div>
-    </div>
+    </main>
 
     <!-- Floating Mini Dock on Desktop -->
     <div id="floatingDock">
@@ -194,12 +209,12 @@
             <span class="indicator-dot" style="background:#4ade80;"></span>
             <span id="dockUser">Active Session</span>
         </span>
-        <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.78rem;" id="dockStats">CPU: 4.2% | RAM: 18%</span>
-        <button class="mini-btn-expand" onclick="expandFromFloatingBar()">🔍 Dashboard</button>
-        <button class="mini-btn-logout" onclick="handleLogout()">🔒 Logout &amp; Relock</button>
+        <span style="color: var(--kiosk-text-muted); font-family: var(--font-mono); font-size: 0.78rem;" id="dockStats" class="tabular-nums">CPU: 4.2% | RAM: 18%</span>
+        <button type="button" class="mini-btn-expand" onclick="expandFromFloatingBar()">Dashboard</button>
+        <button type="button" class="mini-btn-logout" id="miniDockLogoutBtn" onclick="handleHudLogoutClick(this)">Logout &amp; Relock</button>
     </div>
 
-    <!-- Floating Mini Dock for Desktop Window Mode (?floating=1) -->
+    <!-- Floating Mini Dock for Desktop Window Mode (?floating=1) - TELEMETRY HUD PILL -->
     <div id="floatingBarWidget">
         <div class="dock-hud-left">
             <div class="dock-status-indicator" title="Active Sandboxed Session">
@@ -208,13 +223,13 @@
             <div class="dock-identity-block">
                 <div class="dock-user-row">
                     <span class="dock-user-name" id="floatingUserName">Active Student Session</span>
-                    <span class="dock-roll-badge" id="floatingRollBadge">STUDENT</span>
+                    <span class="dock-roll-badge tabular-nums" id="floatingRollBadge">STUDENT</span>
                 </div>
                 <div class="dock-meta-row">
-                    <span class="dock-host-tag" id="floatingHostBadge">COMP-PC-01</span>
+                    <span class="dock-host-tag tabular-nums" id="floatingHostBadge">COMP-PC-01</span>
                     <span class="dock-divider">&bull;</span>
-                    <span class="dock-telemetry-chip" id="floatingCpuChip">CPU 0.1%</span>
-                    <span class="dock-telemetry-chip" id="floatingRamChip">RAM 7.1%</span>
+                    <span class="dock-telemetry-chip tabular-nums" id="floatingCpuChip">CPU 0.1%</span>
+                    <span class="dock-telemetry-chip tabular-nums" id="floatingRamChip">RAM 7.1%</span>
                 </div>
                 <!-- Hidden fallback elements for backwards compatibility -->
                 <span id="floatingUserTitle" style="display: none;"></span>
@@ -222,12 +237,10 @@
             </div>
         </div>
         <div class="dock-hud-right">
-            <button class="dock-btn-logout-cool" onclick="handleLogout()" title="End session and relock machine">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-                <span>Logout &amp; Relock</span>
+            <!-- Accidental-Click Guard: 2-step presentation confirmation before handleLogout (AUD-07) -->
+            <button type="button" class="dock-btn-logout-cool" id="hudLogoutBtn" onclick="handleHudLogoutClick(this)" title="End session and relock machine">
+                <span id="hudLockIconSlot"></span>
+                <span id="hudLogoutLabel">Logout &amp; Relock</span>
             </button>
         </div>
     </div>
@@ -244,73 +257,90 @@
             if (parts.length >= 2 && parts[0] === 'workstation') {
                 return decodeURIComponent(parts[1]);
             }
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('hostname') || 'COMP-PC-01';
+            const params = new URLSearchParams(window.location.search);
+            return params.get('hostname') || 'COMP-PC-01';
         }
 
+        const HOSTNAME = getHostname();
         const urlParams = new URLSearchParams(window.location.search);
         const isFloatingMode = urlParams.get('floating') === '1';
 
-        const HOSTNAME = getHostname();
+        document.getElementById('hostBadge').innerText = HOSTNAME;
+        const floatingHostBadge = document.getElementById('floatingHostBadge');
+        if (floatingHostBadge) floatingHostBadge.innerText = HOSTNAME;
+
         let currentLockState = null;
         let remainingGraceSeconds = 0;
-        let countdownTimer = null;
         let currentActiveSessionId = null;
         let previousStateKey = null;
+        let hudArmedTimeout = null;
 
-        document.getElementById('hostBadge').innerText = HOSTNAME;
+        // Populate initial static vector icons
+        function initStaticIcons() {
+            if (!window.LabTrackIcons) return;
+            const powerIconWrap = document.getElementById('powerIconWrap');
+            if (powerIconWrap) powerIconWrap.innerHTML = LabTrackIcons.render('power', 14);
 
+            const discretePowerIconSlot = document.getElementById('discretePowerIconSlot');
+            if (discretePowerIconSlot) discretePowerIconSlot.innerHTML = LabTrackIcons.render('power', 14);
+
+            const unlockBtnIcon = document.getElementById('unlockBtnIcon');
+            if (unlockBtnIcon) unlockBtnIcon.innerHTML = LabTrackIcons.render('unlock', 16);
+
+            const desktopBtnIcon = document.getElementById('desktopBtnIcon');
+            if (desktopBtnIcon) desktopBtnIcon.innerHTML = LabTrackIcons.render('monitor', 16);
+
+            const logoutBtnIcon = document.getElementById('logoutBtnIcon');
+            if (logoutBtnIcon) logoutBtnIcon.innerHTML = LabTrackIcons.render('lock', 16);
+
+            const tipIconSlot = document.getElementById('tipIconSlot');
+            if (tipIconSlot) tipIconSlot.innerHTML = LabTrackIcons.render('lightbulb', 14);
+
+            const facultyIconSlot = document.getElementById('facultyIconSlot');
+            if (facultyIconSlot) facultyIconSlot.innerHTML = LabTrackIcons.render('graduation-cap', 36);
+
+            const hudLockIconSlot = document.getElementById('hudLockIconSlot');
+            if (hudLockIconSlot) hudLockIconSlot.innerHTML = LabTrackIcons.render('lock', 13);
+        }
+        initStaticIcons();
+
+        // Mode switch if requested (?floating=1)
         if (isFloatingMode) {
             document.body.classList.add('floating-mode');
-            document.title = `⚡ LabTrack [${HOSTNAME}] - Active Session`;
+            const floatingBar = document.getElementById('floatingBarWidget');
+            if (floatingBar) floatingBar.style.display = 'flex';
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            fetchLockState();
-            // Poll lock-state over local switch every 2.5 seconds
-            setInterval(fetchLockState, 2500);
-            // Run countdown tick every second
-            setInterval(tickCountdown, 1000);
-
-            // Initial entrance animation via anime.js
-            if (window.anime && !isFloatingMode) {
-                window.anime({
-                    targets: '#kioskCard',
-                    opacity: [0.75, 1],
-                    translateY: [8, 0],
-                    duration: 350,
-                    easing: 'easeOutQuad'
-                });
-            }
-        });
-
+        // Fetch lock-state from FastAPI backend with live polling
         async function fetchLockState() {
             try {
                 const res = await fetch(`/api/pcs/${HOSTNAME}/lock-state`);
-                if (!res.ok) throw new Error("Server error");
-                const data = await res.json();
-                
-                // Set LAN badge green
-                const lanPill = document.getElementById('lanPill');
-                lanPill.className = "net-chip net-green";
-                lanPill.innerHTML = `<span class="indicator-dot"></span><span>LAN Connected to Lab Server</span>`;
-
-                applyLockState(data);
+                if (res.ok) {
+                    const data = await res.json();
+                    applyLockState(data);
+                } else if (res.status === 404) {
+                    document.getElementById('stateBadge').innerText = "Host Not Found";
+                    showMessage(`Workstation ${HOSTNAME} is not registered in the LabTrack database.`, "msg-error");
+                }
             } catch (err) {
-                // LAN offline
-                const lanPill = document.getElementById('lanPill');
-                lanPill.className = "net-chip net-red";
-                lanPill.innerHTML = `<span class="indicator-dot"></span><span>LAN Disconnected (Check Ethernet cable)</span>`;
+                console.error("Lock-state fetch error:", err);
+                const pill = document.getElementById('lanPill');
+                if (pill) {
+                    pill.className = "net-chip net-red";
+                    pill.innerHTML = `<span class="indicator-dot"></span><span>LAN Control Plane Offline</span>`;
+                }
             }
         }
 
         function applyLockState(data) {
             currentLockState = data;
-            document.getElementById('labNameDisplay').innerText = data.lab_name;
 
-            const stateBadge = document.getElementById('stateBadge');
+            // Update top bar lab name
+            if (data.lab_name) {
+                document.getElementById('labNameDisplay').innerText = data.lab_name;
+            }
 
-            // View toggles
+            // Reset view visibilities
             document.getElementById('loginView').style.display = 'none';
             document.getElementById('occupiedView').style.display = 'none';
             document.getElementById('maintenanceView').style.display = 'none';
@@ -319,32 +349,37 @@
             document.getElementById('individualHeldContext').style.display = 'none';
             document.getElementById('availableContext').style.display = 'none';
 
-            const stateKey = `${data.state}_${data.is_club_event}_${data.is_faculty_lab}`;
+            const stateBadge = document.getElementById('stateBadge');
+            const stateKey = `${data.state}_${data.is_club_event}_${data.is_faculty_lab}_${data.is_admin_dedicated}`;
 
-            if (data.state === 'OCCUPIED') {
+            const iconHelper = window.LabTrackIcons ? window.LabTrackIcons.render : (name => '');
+
+            if (data.state === 'OCCUPIED' && data.active_session) {
                 document.getElementById('occupiedView').style.display = 'block';
-                stateBadge.innerText = "⚡ Session Active";
+                stateBadge.innerHTML = `${iconHelper('cpu', 18)} <span>Active Sandboxed Session</span>`;
                 stateBadge.className = 'state-banner banner-OCCUPIED';
-                if (data.active_session) {
-                    currentActiveSessionId = data.active_session.session_id;
-                    document.getElementById('occStudentName').innerText = data.active_session.student_name;
-                    document.getElementById('occRollNo').innerText = data.active_session.roll_no;
-                    document.getElementById('occSessionId').innerText = `#${data.active_session.session_id}`;
-                    document.getElementById('occCpuLoad').innerText = `${data.active_session.cpu_percent || 3.5}%`;
-                    document.getElementById('occMemLoad').innerText = `${data.active_session.memory_percent || 14.2}%`;
 
-                    if (isFloatingMode) {
-                        const studentName = data.active_session.student_name || 'Student';
-                        const rollNo = data.active_session.roll_no || '-';
-                        const cpu = data.active_session.cpu_percent || 0.1;
-                        const ram = data.active_session.memory_percent || 7.1;
+                const studentName = data.active_session.student_name || 'Active Student';
+                const rollNo = data.active_session.roll_no || 'STU';
+                const sessId = data.active_session.session_id || 1;
+                const cpu = data.active_session.cpu_percent || 0.1;
+                const ram = data.active_session.memory_percent || 7.1;
 
-                        const nameElem = document.getElementById('floatingUserName');
-                        if (nameElem) nameElem.innerText = studentName;
-                        const rollElem = document.getElementById('floatingRollBadge');
-                        if (rollElem) rollElem.innerText = rollNo;
-                        const hostElem = document.getElementById('floatingHostBadge');
-                        if (hostElem) hostElem.innerText = HOSTNAME;
+                currentActiveSessionId = sessId;
+
+                document.getElementById('occStudentName').innerText = studentName;
+                document.getElementById('occRollNo').innerText = rollNo;
+                document.getElementById('occSessionId').innerText = `#${sessId}`;
+                document.getElementById('occCpuLoad').innerText = `${cpu}%`;
+                document.getElementById('occMemLoad').innerText = `${ram}%`;
+
+                // Update floating desktop widget if active
+                if (isFloatingMode) {
+                    const userElem = document.getElementById('floatingUserName');
+                    if (userElem) {
+                        userElem.innerText = studentName;
+                        const rollBadgeElem = document.getElementById('floatingRollBadge');
+                        if (rollBadgeElem) rollBadgeElem.innerText = rollNo;
                         const cpuElem = document.getElementById('floatingCpuChip');
                         if (cpuElem) cpuElem.innerText = `CPU ${cpu}%`;
                         const ramElem = document.getElementById('floatingRamChip');
@@ -360,21 +395,21 @@
                 setWanStatus(true);
             } else if (data.state === 'MAINTENANCE') {
                 document.getElementById('maintenanceView').style.display = 'block';
-                stateBadge.innerText = "⚠️ Maintenance Mode";
+                stateBadge.innerHTML = `${iconHelper('alert-triangle', 18)} <span>Workstation Offline (Maintenance)</span>`;
                 stateBadge.className = 'state-banner banner-MAINTENANCE';
                 setWanStatus(false);
             } else if (data.is_club_event) {
                 // Priority Club Event mode
                 document.getElementById('loginView').style.display = 'block';
                 document.getElementById('clubHeldContext').style.display = 'block';
-                stateBadge.innerText = `⚡ ${data.club_name || 'TECHNICAL CLUB'} EVENT`;
+                stateBadge.innerHTML = `${iconHelper('zap', 18)} <span>${(data.club_name || 'TECHNICAL CLUB').toUpperCase()} WORKSHOP</span>`;
                 stateBadge.className = 'state-banner banner-HELD';
                 document.getElementById('clubLogoImg').src = data.club_logo_url || '/static/clubs/gdg.jpeg';
                 document.getElementById('clubNameHeader').innerText = data.club_name || 'Technical Coding Club';
                 document.getElementById('clubEventTitle').innerText = data.event_title || 'Club Workshop';
                 document.getElementById('loginRollLabel').innerText = "Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
-                btn.innerText = "🚀 Join Club Workshop & Unlock";
+                document.getElementById('unlockBtnLabel').innerText = "Join Club Workshop & Unlock";
                 btn.style.backgroundColor = "#059669";
                 btn.style.borderColor = "#059669";
                 setWanStatus(false);
@@ -382,16 +417,16 @@
                 // Faculty Practical Lab mode
                 document.getElementById('loginView').style.display = 'block';
                 document.getElementById('facultyHeldContext').style.display = 'block';
-                stateBadge.innerText = `🎓 FACULTY PRACTICAL LAB`;
+                stateBadge.innerHTML = `${iconHelper('graduation-cap', 18)} <span>FACULTY PRACTICAL LAB</span>`;
                 stateBadge.className = 'state-banner banner-HELD';
                 document.getElementById('facultyCourseHeader').innerText = data.course_name || 'Practical Session';
                 document.getElementById('facultyBatchTitle').innerText = data.batch_name || 'Enrolled Batch';
                 document.getElementById('facultyInstructorSubtitle').innerHTML = `Session conducted by <strong>${data.faculty_name || 'Faculty'}</strong>. Enrolled batch students can log in to begin practical work.`;
                 document.getElementById('loginRollLabel').innerText = "Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
-                btn.innerText = "🎓 Begin Lab Session & Unlock";
-                btn.style.backgroundColor = "#15803d";
-                btn.style.borderColor = "#15803d";
+                document.getElementById('unlockBtnLabel').innerText = "Begin Lab Session & Unlock";
+                btn.style.backgroundColor = "#4338ca";
+                btn.style.borderColor = "#4338ca";
                 setWanStatus(false);
             } else if (data.state === 'HELD') {
                 // Individual / Admin Dedicated Student Reservation mode
@@ -405,8 +440,10 @@
                 const adminNotice = document.getElementById('heldAdminNotice');
                 if (adminNotice) adminNotice.style.display = isDedicated ? "block" : "none";
 
-                stateBadge.innerText = isDedicated ? "🔒 Reserved by Admin" : "🔒 Workstation Reserved";
-                stateBadge.className = 'state-banner banner-HELD';
+                stateBadge.innerHTML = isDedicated ? 
+                    `${iconHelper('shield-lock', 18)} <span>Admin Dedicated Allocation</span>` : 
+                    `${iconHelper('clock', 18)} <span>Workstation Reserved</span>`;
+                stateBadge.className = isDedicated ? 'state-banner banner-DEDICATED' : 'state-banner banner-HELD';
 
                 document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
                 document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
@@ -416,7 +453,7 @@
                 const purposeText = document.getElementById('heldPurposeText');
                 if (data.purpose) {
                     purposeBadge.style.display = 'block';
-                    purposeText.innerText = data.purpose;
+                    purposeText.innerHTML = `${iconHelper('microscope', 14)} <span>${data.purpose}</span>`;
                 } else {
                     purposeBadge.style.display = 'none';
                 }
@@ -453,22 +490,28 @@
 
                 document.getElementById('loginRollLabel').innerText = isDedicated ? "Designated Student Roll Number" : "Reserved Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
-                btn.innerText = isDedicated ? "🔓 Unlock Dedicated Workstation" : "🔓 Unlock Reserved Workstation";
-                btn.style.backgroundColor = isDedicated ? "#d97706" : "#d97706";
-                btn.style.borderColor = isDedicated ? "#d97706" : "#d97706";
+                document.getElementById('unlockBtnLabel').innerText = isDedicated ? "Unlock Dedicated Workstation" : "Unlock Reserved Workstation";
+                btn.style.backgroundColor = isDedicated ? "#0284c7" : "#d97706";
+                btn.style.borderColor = isDedicated ? "#0284c7" : "#d97706";
                 setWanStatus(false);
             } else {
                 // Available Walk-in mode
                 document.getElementById('loginView').style.display = 'block';
                 document.getElementById('availableContext').style.display = 'block';
-                stateBadge.innerText = "🟢 Workstation Available";
+                stateBadge.innerHTML = `${iconHelper('check-circle', 18)} <span>Workstation Available (Walk-in Permitted)</span>`;
                 stateBadge.className = 'state-banner banner-AVAILABLE';
                 document.getElementById('loginRollLabel').innerText = "Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
-                btn.innerText = "🔓 Unlock Workstation";
+                document.getElementById('unlockBtnLabel').innerText = "Unlock Workstation";
                 btn.style.backgroundColor = "#2563eb";
                 btn.style.borderColor = "#2563eb";
                 setWanStatus(false);
+
+                // Focus roll number input automatically for rapid walk-in speed (AUD-04)
+                const rollInput = document.getElementById('loginRollInput');
+                if (rollInput && document.activeElement !== rollInput && !isFloatingMode) {
+                    rollInput.focus();
+                }
             }
 
             // Animate on state transition
@@ -477,7 +520,7 @@
                     targets: '#kioskCard',
                     opacity: [0.8, 1],
                     translateY: [4, 0],
-                    duration: 250,
+                    duration: 220,
                     easing: 'easeOutQuad'
                 });
             }
@@ -542,8 +585,8 @@
 
             const submitBtn = document.getElementById('loginSubmitBtn');
             submitBtn.disabled = true;
-            const originalText = submitBtn.innerText;
-            submitBtn.innerText = "Authenticating...";
+            const originalLabel = document.getElementById('unlockBtnLabel').innerText;
+            document.getElementById('unlockBtnLabel').innerText = "Authenticating...";
 
             try {
                 const res = await fetch('/api/agent/checkin', {
@@ -571,19 +614,58 @@
                     }
                     setTimeout(fetchLockState, 500);
                 } else {
-                    showMessage(data.detail || "Authentication failed. Please verify credentials.", "msg-error");
+                    // Structured 403 / 401 error presentation (AUD-06)
+                    const iconHelper = window.LabTrackIcons ? window.LabTrackIcons.render : (name => '');
+                    if (res.status === 403 && data.detail && data.detail.includes("strictly held for")) {
+                        const errHtml = `
+                            <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                                <span style="color: #f87171; flex-shrink: 0; margin-top: 2px;">${iconHelper('shield-alert', 16)}</span>
+                                <div>
+                                    <strong>Access Denied:</strong> ${data.detail}<br/>
+                                    <span style="font-size: 0.76rem; color: #fca5a5; display: block; margin-top: 4px;">
+                                        Please choose an AVAILABLE computer nearby or check your advance reservations in the portal.
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                        const box = document.getElementById('messageBox');
+                        box.innerHTML = errHtml;
+                        box.className = "msg-box msg-error";
+                        box.style.display = "block";
+                    } else {
+                        showMessage(data.detail || "Authentication failed. Please verify credentials.", "msg-error");
+                    }
                 }
             } catch (err) {
                 showMessage("Connection error reaching lab server control plane.", "msg-error");
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.innerText = originalText;
+                document.getElementById('unlockBtnLabel').innerText = originalLabel;
+            }
+        }
+
+        // Accidental-Click Protection for HUD Mini-Dock (AUD-07)
+        function handleHudLogoutClick(btn) {
+            if (btn.classList.contains('confirming')) {
+                // Second click confirmed: invoke original handleLogout
+                if (hudArmedTimeout) clearTimeout(hudArmedTimeout);
+                btn.classList.remove('confirming');
+                btn.innerText = "Logging out...";
+                handleLogout();
+            } else {
+                // First click: arm confirmation state with 4s timeout
+                btn.classList.add('confirming');
+                const originalText = btn.innerHTML;
+                const iconHelper = window.LabTrackIcons ? window.LabTrackIcons.render : (name => '');
+                btn.innerHTML = `${iconHelper('alert-triangle', 13)} <span>Click Again to Relock</span>`;
+                hudArmedTimeout = setTimeout(() => {
+                    btn.classList.remove('confirming');
+                    btn.innerHTML = originalText;
+                }, 4000);
             }
         }
 
         async function handleLogout() {
-            if (!confirm("Are you sure you want to end your session and lock this workstation?")) return;
-
             try {
                 if (currentActiveSessionId) {
                     await fetch('/api/agent/close', {
@@ -656,6 +738,11 @@
             document.body.style.backgroundColor = '#09090b';
             document.getElementById('floatingDock').style.display = 'none';
         }
+
+        // Live Poll every 5 seconds
+        setInterval(fetchLockState, 5000);
+        setInterval(tickCountdown, 1000);
+        fetchLockState();
     </script>
 </body>
 </html>
