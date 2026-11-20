@@ -209,3 +209,77 @@ def test_7_edge_cases_and_conflict_handling(client):
 
     # Clean up
     client.post("/api/admin/system/release-all", headers={"Authorization": f"Bearer {admin_token}"})
+
+
+def test_8_multi_day_academic_reservation_and_extension(client):
+    """Test real-world academic use cases: 5 days reservation, 30 days extension, purpose & reason tracking."""
+    admin_token = get_admin_token(client)
+    client.post("/api/admin/system/release-all", headers={"Authorization": f"Bearer {admin_token}"})
+
+    # 1. Create a 5-day reservation for Final Year Capstone Project
+    payload = {
+        "student_identifier": "STU001",
+        "hostname": "COMP-PC-01",
+        "duration_days": 5,
+        "purpose": "Final Year Capstone Project",
+        "reason": "Autonomous Drone Navigation Simulation using ROS2",
+        "force_preempt": True
+    }
+    resp = client.post("/api/admin/reservations/dedicated", headers={"Authorization": f"Bearer {admin_token}"}, json=payload)
+    assert resp.status_code == 200, f"5-day reservation creation failed: {resp.text}"
+    data = resp.json()
+    assert data["status"] == "success"
+    assert data["hostname"] == "COMP-PC-01"
+    assert data["roll_no"] == "STU001"
+    assert data["purpose"] == "Final Year Capstone Project"
+    assert data["reason"] == "Autonomous Drone Navigation Simulation using ROS2"
+    assert "remaining_display" in data
+    assert "days remaining" in data["remaining_display"] or "4d" in data["remaining_display"]
+    assert "time_window" in data
+    res_id = data["reservation_id"]
+
+    # 2. Check PC lock-state exposes academic purpose, project reason, and human-friendly time
+    lock_resp = client.get("/api/pcs/COMP-PC-01/lock-state")
+    assert lock_resp.status_code == 200
+    lock_data = lock_resp.json()
+    assert lock_data["state"] == "HELD"
+    assert lock_data["is_admin_dedicated"] is True
+    assert lock_data["reserved_roll_no"] == "STU001"
+    assert lock_data["purpose"] == "Final Year Capstone Project"
+    assert lock_data["academic_reason"] == "Autonomous Drone Navigation Simulation using ROS2"
+    assert lock_data["remaining_time_display"] is not None
+    assert "days remaining" in lock_data["remaining_time_display"] or "4d" in lock_data["remaining_time_display"]
+    assert lock_data["time_window"] is not None
+
+    # 3. Extend by 30 days (1 month) for capstone defense revisions
+    ext_resp = client.post(
+        f"/api/admin/reservations/{res_id}/extend",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "additional_days": 30,
+            "reason": "Reviewer requested hardware-in-the-loop stress testing and benchmark revisions"
+        }
+    )
+    assert ext_resp.status_code == 200, f"30-day extension failed: {ext_resp.text}"
+    ext_data = ext_resp.json()
+    assert ext_data["status"] == "success"
+    assert ext_data["extension_reason"] == "Reviewer requested hardware-in-the-loop stress testing and benchmark revisions"
+    assert "remaining_display" in ext_data
+    # 35 days remaining -> "1 mo 5d remaining" or "35 days remaining"
+    assert ("mo" in ext_data["remaining_display"] or "month" in ext_data["remaining_display"] or "days remaining" in ext_data["remaining_display"])
+
+    # 4. List dedicated reservations and verify structured metadata and notes trail
+    list_resp = client.get("/api/admin/reservations/dedicated", headers={"Authorization": f"Bearer {admin_token}"})
+    assert list_resp.status_code == 200
+    res_list = [r for r in list_resp.json() if r["id"] == res_id]
+    assert len(res_list) == 1
+    record = res_list[0]
+    assert record["purpose"] == "Final Year Capstone Project"
+    assert "Autonomous Drone Navigation" in record["reason"]
+    assert "Extended:" in record["notes"]
+    assert "Reviewer requested hardware-in-the-loop" in record["notes"]
+
+    # 5. Clean up
+    client.post(f"/api/admin/reservations/{res_id}/release", headers={"Authorization": f"Bearer {admin_token}"})
+    client.post("/api/admin/system/release-all", headers={"Authorization": f"Bearer {admin_token}"})
+

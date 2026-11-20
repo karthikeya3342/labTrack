@@ -5,6 +5,7 @@ import json
 from backend.app.models.schemas import LockStateResponse
 from backend.app.core.database import fetch_all, fetch_one, execute
 from backend.app.core.lifecycle import reap_expired_allocations
+from backend.app.api.admin import format_time_window_display, format_remaining_display
 
 router = APIRouter(prefix="/pcs", tags=["Workstations"])
 
@@ -279,16 +280,55 @@ async def get_pc_lock_state(hostname: str):
                 resp.reserved_end_time = res["end_time"]
                 is_admin = (res["allocation_basis"] == "ADMIN_DEDICATED" or "Admin Dedicated" in (res["notes"] or ""))
                 resp.is_admin_dedicated = is_admin
-                resp.purpose = res["notes"] or res["task_type"] or "Workstation Booking"
-                if res["grace_deadline"]:
-                    diff = (res["grace_deadline"] - now).total_seconds()
-                    resp.remaining_grace_seconds = max(0, int(diff))
-                elif res["end_time"]:
-                    diff = (res["end_time"] - now).total_seconds()
-                    resp.remaining_grace_seconds = max(0, int(diff))
-                if is_admin:
-                    resp.message = f"🔒 Workstation Reserved by Admin for {res['student_name']} ({res['roll_no']})"
+
+                st = res["start_time"]
+                et = res["end_time"]
+                if et and et.tzinfo is None:
+                    et = et.replace(tzinfo=timezone.utc)
+                if st and st.tzinfo is None:
+                    st = st.replace(tzinfo=timezone.utc)
+
+                if et:
+                    rem_secs = max(0, int((et - now).total_seconds()))
+                elif res["grace_deadline"]:
+                    gd = res["grace_deadline"]
+                    if gd.tzinfo is None:
+                        gd = gd.replace(tzinfo=timezone.utc)
+                    rem_secs = max(0, int((gd - now).total_seconds()))
                 else:
+                    rem_secs = 0
+
+                resp.remaining_grace_seconds = rem_secs
+                resp.remaining_time_display = format_remaining_display(rem_secs)
+                if st and et:
+                    resp.time_window = format_time_window_display(st, et)
+
+                if is_admin:
+                    raw_notes = res["notes"] or ""
+                    purpose = "Academic Research Work / Thesis"
+                    academic_reason = ""
+                    if "[" in raw_notes and "]" in raw_notes:
+                        purpose = raw_notes.split("[")[1].split("]")[0].strip()
+                        after_bracket = raw_notes.split("]", 1)[1].strip()
+                        if after_bracket.startswith("- "):
+                            academic_reason = after_bracket[2:].strip()
+                        elif after_bracket.startswith(": "):
+                            academic_reason = after_bracket[2:].strip()
+                        else:
+                            academic_reason = after_bracket
+                    elif ":" in raw_notes:
+                        parts = raw_notes.split(":", 1)
+                        purpose = parts[1].split("|")[0].strip() if len(parts) > 1 else "Academic Research Work / Thesis"
+                        if "|" in raw_notes:
+                            academic_reason = raw_notes.split("|", 1)[1].strip()
+                    else:
+                        academic_reason = raw_notes
+
+                    resp.purpose = purpose
+                    resp.academic_reason = academic_reason
+                    resp.message = f"🔒 Workstation Reserved by Admin for {res['student_name']} ({res['roll_no']}) — {purpose}"
+                else:
+                    resp.purpose = res["notes"] or res["task_type"] or "Workstation Booking"
                     resp.message = f"🔒 Workstation Reserved for {res['student_name']} ({res['roll_no']})"
         else:
             # Self-healing: HELD state is stale, in the future, or grace deadline passed

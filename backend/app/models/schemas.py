@@ -43,6 +43,9 @@ class LockStateResponse(BaseModel):
     remaining_grace_seconds: Optional[int] = None
     reserved_end_time: Optional[datetime] = None
     is_admin_dedicated: Optional[bool] = False
+    remaining_time_display: Optional[str] = None
+    academic_reason: Optional[str] = None
+    time_window: Optional[str] = None
     active_session: Optional[Dict[str, Any]] = None
     latest_telemetry: Optional[Dict[str, Any]] = None
     is_club_event: Optional[bool] = False
@@ -119,14 +122,20 @@ class AdminDedicatedReservationRequest(BaseModel):
     hostname: Optional[str] = None
     lab_id: Optional[int] = None
     start_time: Optional[datetime] = None  # None = immediate
-    duration_minutes: Optional[int] = 60
+    duration_days: Optional[int] = None  # e.g. 5 days, 30 days
+    duration_hours: Optional[int] = None
+    duration_minutes: Optional[int] = None
     end_time: Optional[datetime] = None
-    purpose: Optional[str] = "Admin Dedicated Reservation"
+    purpose: Optional[str] = "Academic Research"
+    reason: Optional[str] = None
     notes: Optional[str] = None
     force_preempt: Optional[bool] = False
 
 class AdminExtendReservationRequest(BaseModel):
-    additional_minutes: Optional[int] = 30
+    additional_days: Optional[int] = None  # e.g. 5, 30 days
+    additional_hours: Optional[int] = None
+    additional_minutes: Optional[int] = None
     new_end_time: Optional[datetime] = None
-    reason: Optional[str] = "Extended by Administrator"
+    reason: Optional[str] = "Academic Research / Final Year Project Extension"
+
 

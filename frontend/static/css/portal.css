@@ -1367,3 +1367,14 @@ tr:hover td {
     font-weight: 600;
 }
 
+.purpose-chip-tag {
+    background-color: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    color: #065f46;
+    font-size: 0.73rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+

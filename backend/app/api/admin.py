@@ -343,6 +343,32 @@ async def search_students(
     return users
 
 
+def format_time_window_display(st: datetime, et: datetime) -> str:
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+    st_ist = st.astimezone(ist_tz)
+    et_ist = et.astimezone(ist_tz)
+    if st_ist.date() == et_ist.date():
+        return f"{st_ist.strftime('%b %d, %Y')} ({st_ist.strftime('%I:%M %p')} – {et_ist.strftime('%I:%M %p')})"
+    return f"{st_ist.strftime('%b %d, %Y')} – {et_ist.strftime('%b %d, %Y (%I:%M %p)')}"
+
+def format_remaining_display(remaining_seconds: int) -> str:
+    if remaining_seconds <= 0:
+        return "Expired"
+    days = remaining_seconds // 86400
+    hours = (remaining_seconds % 86400) // 3600
+    mins = (remaining_seconds % 3600) // 60
+    if days >= 30:
+        months = days // 30
+        rem_d = days % 30
+        return f"{months} mo {rem_d}d remaining" if rem_d > 0 else f"{months} month{'s' if months > 1 else ''} remaining"
+    if days > 1:
+        return f"{days} days remaining" if hours == 0 else f"{days}d {hours}h remaining"
+    if days == 1:
+        return f"1 day {hours}h remaining"
+    if hours > 0:
+        return f"{hours}h {mins}m remaining"
+    return f"{mins} min remaining"
+
 @router.get("/reservations/dedicated")
 async def list_dedicated_reservations(
     payload: dict = Depends(get_current_user_token_payload)
@@ -386,10 +412,29 @@ async def list_dedicated_reservations(
         if et and et > now and row["status"] in ("HELD", "ACTIVE", "PENDING"):
             remaining_seconds = max(0, int((et - now).total_seconds()))
 
-        ist_tz = timezone(timedelta(hours=5, minutes=30))
-        st_ist = st.astimezone(ist_tz) if st else None
-        et_ist = et.astimezone(ist_tz) if et else None
-        time_str = f"{st_ist.strftime('%I:%M %p')} - {et_ist.strftime('%I:%M %p')}" if (st_ist and et_ist) else ""
+        time_str = format_time_window_display(st, et) if (st and et) else ""
+        rem_str = format_remaining_display(remaining_seconds)
+
+        # Parse structured purpose and reason from notes
+        purpose = "Academic Research Work / Thesis"
+        reason = ""
+        raw_notes = row["notes"] or ""
+        if "[" in raw_notes and "]" in raw_notes:
+            purpose = raw_notes.split("[")[1].split("]")[0].strip()
+            after_bracket = raw_notes.split("]", 1)[1].strip()
+            if after_bracket.startswith("- "):
+                reason = after_bracket[2:].strip()
+            elif after_bracket.startswith(": "):
+                reason = after_bracket[2:].strip()
+            else:
+                reason = after_bracket
+        elif ":" in raw_notes:
+            parts = raw_notes.split(":", 1)
+            purpose = parts[1].split("|")[0].strip() if len(parts) > 1 else "Academic Research"
+            if "|" in raw_notes:
+                reason = raw_notes.split("|", 1)[1].strip()
+        else:
+            reason = raw_notes
 
         results.append({
             "id": row["id"],
@@ -405,6 +450,9 @@ async def list_dedicated_reservations(
             "end_time": et.isoformat() if et else None,
             "time_window": time_str,
             "remaining_seconds": remaining_seconds,
+            "remaining_display": rem_str,
+            "purpose": purpose,
+            "reason": reason,
             "status": row["status"],
             "notes": row["notes"],
             "pc_state": row["pc_state"],
@@ -452,8 +500,14 @@ async def create_dedicated_reservation(
         if end_time.tzinfo is None:
             end_time = end_time.replace(tzinfo=timezone.utc)
     else:
-        duration_mins = max(5, req.duration_minutes or 60)
-        end_time = start_time + timedelta(minutes=duration_mins)
+        days = req.duration_days or 0
+        hours = req.duration_hours or 0
+        minutes = req.duration_minutes or 0
+        if days > 0 or hours > 0 or minutes > 0:
+            total_delta = timedelta(days=days, hours=hours, minutes=minutes)
+        else:
+            total_delta = timedelta(days=7) # Default 7 days for academic workstation reservation
+        end_time = start_time + total_delta
 
     if end_time <= start_time:
         raise HTTPException(
@@ -595,9 +649,9 @@ async def create_dedicated_reservation(
 
     # 8. Create Dedicated Reservation
     init_status = "HELD" if is_immediate else "PENDING"
-    notes = f"Admin Dedicated: {req.purpose or 'Reserved by Lab Administrator'}"
-    if req.notes:
-        notes += f" | {req.notes.strip()}"
+    purpose = (req.purpose or "Academic Research Work / Thesis").strip()
+    reason_text = req.reason.strip() if req.reason else (req.notes.strip() if req.notes else "Dedicated Workstation Allocation")
+    notes = f"Admin Dedicated: [{purpose}] - {reason_text}"
 
     res_id = await fetch_val("""
         INSERT INTO reservations (
@@ -626,6 +680,10 @@ async def create_dedicated_reservation(
 
     lab_info = await fetch_one("SELECT name FROM labs WHERE id = $1", target_pc["lab_id"])
 
+    remaining_seconds = max(0, int((end_time - now).total_seconds()))
+    remaining_display = format_remaining_display(remaining_seconds)
+    time_window = format_time_window_display(start_time, end_time)
+
     return {
         "status": "success",
         "reservation_id": res_id,
@@ -636,8 +694,13 @@ async def create_dedicated_reservation(
         "roll_no": student["roll_no"],
         "start_time": start_time.isoformat(),
         "end_time": end_time.isoformat(),
+        "time_window": time_window,
+        "remaining_seconds": remaining_seconds,
+        "remaining_display": remaining_display,
+        "purpose": purpose,
+        "reason": reason_text,
         "reservation_status": init_status,
-        "message": f"Workstation {target_pc['hostname']} dedicated to {student['name']} ({student['roll_no']}) until {end_time.strftime('%I:%M %p')}."
+        "message": f"Workstation {target_pc['hostname']} dedicated to {student['name']} ({student['roll_no']}) for '{purpose}' until {end_time.strftime('%b %d, %Y (%I:%M %p)')} ({remaining_display})."
     }
 
 
@@ -683,8 +746,14 @@ async def extend_dedicated_reservation(
         if new_end.tzinfo is None:
             new_end = new_end.replace(tzinfo=timezone.utc)
     else:
-        add_mins = max(5, req.additional_minutes or 30)
-        new_end = base_time + timedelta(minutes=add_mins)
+        days = req.additional_days or 0
+        hours = req.additional_hours or 0
+        minutes = req.additional_minutes or 0
+        if days > 0 or hours > 0 or minutes > 0:
+            delta = timedelta(days=days, hours=hours, minutes=minutes)
+        else:
+            delta = timedelta(days=5) # Default 5 days extension
+        new_end = base_time + delta
 
     if new_end <= cur_end:
         raise HTTPException(
@@ -706,7 +775,7 @@ async def extend_dedicated_reservation(
     """, res["pc_id"], reservation_id, cur_end, new_end)
     if res_clash:
         ist_tz = timezone(timedelta(hours=5, minutes=30))
-        st_ist = res_clash["st"].astimezone(ist_tz).strftime('%I:%M %p')
+        st_ist = res_clash["st"].astimezone(ist_tz).strftime('%b %d, %I:%M %p')
         who = f"{res_clash['clash_name']} ({res_clash['clash_roll']})" if res_clash["clash_name"] else (res_clash["notes"] or "another booking")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -725,20 +794,26 @@ async def extend_dedicated_reservation(
     """, res["lab_id"], cur_end, new_end)
     if club_clash:
         ist_tz = timezone(timedelta(hours=5, minutes=30))
-        st_ist = club_clash["st"].astimezone(ist_tz).strftime('%I:%M %p')
+        st_ist = club_clash["st"].astimezone(ist_tz).strftime('%b %d, %I:%M %p')
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Cannot extend: Laboratory is scheduled for club event '{club_clash['club_name']} - {club_clash['title']}' starting at {st_ist}."
         )
 
-    # Apply extension: update time_range and grace_deadline
+    # Record academic extension reason in notes
+    ext_reason = (req.reason or "Academic project / research milestone extension").strip()
+    existing_notes = res["notes"] or "Admin Dedicated"
+    updated_notes = f"{existing_notes} | Extended: {ext_reason}"
+
+    # Apply extension: update time_range, grace_deadline, and notes
     await execute("""
         UPDATE reservations
         SET time_range = tstzrange(lower(time_range), $1, '[)'),
             grace_deadline = $1,
+            notes = $2,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2;
-    """, new_end, reservation_id)
+        WHERE id = $3;
+    """, new_end, updated_notes, reservation_id)
 
     # Ensure PC state remains HELD if not OCCUPIED
     await execute("""
@@ -747,7 +822,10 @@ async def extend_dedicated_reservation(
         WHERE id = $1 AND state = 'AVAILABLE';
     """, res["pc_id"])
 
-    remaining_minutes = max(0, int((new_end - now).total_seconds() / 60))
+    remaining_seconds = max(0, int((new_end - now).total_seconds()))
+    remaining_minutes = max(0, int(remaining_seconds / 60))
+    remaining_display = format_remaining_display(remaining_seconds)
+    time_window = format_time_window_display(res["start_time"], new_end)
 
     return {
         "status": "success",
@@ -756,8 +834,12 @@ async def extend_dedicated_reservation(
         "student_name": res["student_name"],
         "roll_no": res["roll_no"],
         "new_end_time": new_end.isoformat(),
+        "time_window": time_window,
+        "remaining_seconds": remaining_seconds,
         "remaining_minutes": remaining_minutes,
-        "message": f"Reservation on {res['hostname']} extended until {new_end.strftime('%I:%M %p')} ({remaining_minutes} min remaining)."
+        "remaining_display": remaining_display,
+        "extension_reason": ext_reason,
+        "message": f"Reservation on {res['hostname']} extended until {new_end.strftime('%b %d, %Y (%I:%M %p)')} ({remaining_display}) for: {ext_reason}."
     }
 
 

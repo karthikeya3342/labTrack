@@ -2118,11 +2118,18 @@
             const [allocMode, setAllocMode] = useState('auto'); // 'auto' | 'specific'
             const [selectedLabId, setSelectedLabId] = useState('');
             const [selectedPcId, setSelectedPcId] = useState('');
-            const [durationMinutes, setDurationMinutes] = useState(60);
-            const [purpose, setPurpose] = useState('Final Year Capstone Project Defense');
+            const [durationDays, setDurationDays] = useState(5);
+            const [purpose, setPurpose] = useState('Academic Research Work / Thesis');
             const [customNotes, setCustomNotes] = useState('');
             const [forcePreempt, setForcePreempt] = useState(false);
             const [submittingDedicated, setSubmittingDedicated] = useState(false);
+
+            // Extend Dedicated Reservation Modal State
+            const [showExtendModal, setShowExtendModal] = useState(false);
+            const [extendingRes, setExtendingRes] = useState(null);
+            const [extendDays, setExtendDays] = useState(5);
+            const [extendReason, setExtendReason] = useState('Research paper revisions & model evaluation deadline');
+            const [submittingExtend, setSubmittingExtend] = useState(false);
 
             // Admin tab & fleet filter states
             const [eventTab, setEventTab] = useState('pending'); // 'pending' | 'active'
@@ -2187,8 +2194,8 @@
                 setAllocMode('auto');
                 setSelectedLabId(labs.length > 0 ? labs[0].id : '');
                 setSelectedPcId('');
-                setDurationMinutes(60);
-                setPurpose('Final Year Capstone Project Defense');
+                setDurationDays(5);
+                setPurpose('Academic Research Work / Thesis');
                 setCustomNotes('');
                 setForcePreempt(false);
                 setSubmittingDedicated(false);
@@ -2208,8 +2215,9 @@
                         student_identifier: identifier,
                         pc_id: allocMode === 'specific' && selectedPcId ? parseInt(selectedPcId) : null,
                         lab_id: selectedLabId ? parseInt(selectedLabId) : null,
-                        duration_minutes: parseInt(durationMinutes) || 60,
+                        duration_days: parseInt(durationDays) || 5,
                         purpose: purpose,
+                        reason: customNotes.trim() || 'Academic workstation allocation',
                         notes: customNotes.trim() || null,
                         force_preempt: forcePreempt
                     };
@@ -2240,7 +2248,47 @@
                 }
             };
 
-            const handleQuickExtend = async (resId, minutes) => {
+            const openExtendModal = (res) => {
+                setExtendingRes(res);
+                setExtendDays(5);
+                setExtendReason('Academic milestone revisions & continuous research compute');
+                setShowExtendModal(true);
+            };
+
+            const submitExtendReservation = async (e) => {
+                if (e) e.preventDefault();
+                if (!extendingRes) return;
+                setSubmittingExtend(true);
+                try {
+                    const res = await fetch(`/api/admin/reservations/${extendingRes.id}/extend`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            additional_days: parseInt(extendDays) || 5,
+                            reason: extendReason.trim() || 'Academic project / thesis milestone extension'
+                        })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        notify('success', data.message || `Workstation allocation extended!`);
+                        setShowExtendModal(false);
+                        setExtendingRes(null);
+                        fetchDedicated();
+                        onRefresh();
+                    } else {
+                        notify('danger', data.detail || 'Failed to extend reservation.');
+                    }
+                } catch(e) {
+                    notify('danger', 'Network error extending reservation.');
+                } finally {
+                    setSubmittingExtend(false);
+                }
+            };
+
+            const handleQuickExtendDays = async (resId, days, reason) => {
                 try {
                     const res = await fetch(`/api/admin/reservations/${resId}/extend`, {
                         method: 'POST',
@@ -2248,11 +2296,14 @@
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${token}`
                         },
-                        body: JSON.stringify({ additional_minutes: minutes })
+                        body: JSON.stringify({
+                            additional_days: days,
+                            reason: reason || `${days} Days Academic Extension`
+                        })
                     });
                     const data = await res.json();
                     if (res.ok) {
-                        notify('success', data.message || `Extended by ${minutes} minutes!`);
+                        notify('success', data.message || `Extended by ${days} days!`);
                         fetchDedicated();
                         onRefresh();
                     } else {
@@ -2602,12 +2653,12 @@
                                                         <td>
                                                             {res.status === 'HELD' && (
                                                                 <span className="status-badge badge-HELD">
-                                                                    🔒 HELD ({remMins > 0 ? `${remMins}m left` : 'Awaiting Student'})
+                                                                    🔒 HELD ({res.remaining_display || (remMins > 0 ? `${remMins}m left` : 'Awaiting Student')})
                                                                 </span>
                                                             )}
                                                             {res.status === 'ACTIVE' && (
                                                                 <span className="status-badge badge-AVAILABLE">
-                                                                    🟢 ACTIVE • In Session ({remMins}m left)
+                                                                    🟢 ACTIVE • In Session ({res.remaining_display || `${remMins}m left`})
                                                                 </span>
                                                             )}
                                                             {res.status === 'PENDING' && (
@@ -2623,33 +2674,46 @@
                                                             )}
                                                         </td>
                                                         <td>
-                                                            <div style={{ fontSize: '0.82rem', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={res.notes}>
-                                                                {res.notes || 'Admin Dedicated'}
+                                                            <div>
+                                                                <span className="purpose-chip-tag">{res.purpose || 'Academic Research'}</span>
+                                                                {res.reason && (
+                                                                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={res.reason}>
+                                                                        {res.reason}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td>
                                                             {isLive ? (
-                                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                                                                     <button
                                                                         className="quick-chip-btn"
-                                                                        onClick={() => handleQuickExtend(res.id, 30)}
-                                                                        title="Extend by 30 minutes"
+                                                                        onClick={() => handleQuickExtendDays(res.id, 5, 'Quick 5 Days Extension')}
+                                                                        title="Extend by 5 days"
                                                                     >
-                                                                        +30m
+                                                                        +5 Days
                                                                     </button>
                                                                     <button
                                                                         className="quick-chip-btn"
-                                                                        onClick={() => handleQuickExtend(res.id, 60)}
-                                                                        title="Extend by 1 hour"
+                                                                        onClick={() => handleQuickExtendDays(res.id, 7, 'Quick 1 Week Extension')}
+                                                                        title="Extend by 1 week (7 days)"
                                                                     >
-                                                                        +1h
+                                                                        +1 Week
                                                                     </button>
                                                                     <button
                                                                         className="quick-chip-btn"
-                                                                        onClick={() => handleQuickExtend(res.id, 120)}
-                                                                        title="Extend by 2 hours"
+                                                                        onClick={() => handleQuickExtendDays(res.id, 30, 'Quick 1 Month Extension')}
+                                                                        title="Extend by 1 month (30 days)"
                                                                     >
-                                                                        +2h
+                                                                        +1 Month
+                                                                    </button>
+                                                                    <button
+                                                                        className="quick-chip-btn"
+                                                                        style={{ background: '#f8fafc', color: '#1e293b', border: '1px solid #cbd5e1' }}
+                                                                        onClick={() => openExtendModal(res)}
+                                                                        title="Extend with custom duration and specify academic reason"
+                                                                    >
+                                                                        Extend / Reason...
                                                                     </button>
                                                                     <button
                                                                         className="btn btn-danger btn-sm"
@@ -3100,20 +3164,22 @@
 
                                     {/* 3. Duration Selection */}
                                     <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                        <label>Reservation Duration</label>
+                                        <label>Academic Allocation Duration</label>
                                         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                                             {[
-                                                { label: '30 min', val: 30 },
-                                                { label: '1 hour', val: 60 },
-                                                { label: '2 hours', val: 120 },
-                                                { label: '4 hours', val: 240 },
-                                                { label: 'All Day (8h)', val: 480 }
+                                                { label: '5 Days', val: 5 },
+                                                { label: '1 Week (7d)', val: 7 },
+                                                { label: '2 Weeks (14d)', val: 14 },
+                                                { label: '1 Month (30d)', val: 30 },
+                                                { label: 'Semester (90d)', val: 90 },
+                                                { label: '1 Day', val: 1 },
+                                                { label: '3 Days', val: 3 }
                                             ].map(d => (
                                                 <button
                                                     key={d.val}
                                                     type="button"
-                                                    className={`quick-chip-btn ${durationMinutes === d.val ? 'active' : ''}`}
-                                                    onClick={() => setDurationMinutes(d.val)}
+                                                    className={`quick-chip-btn ${durationDays === d.val ? 'active' : ''}`}
+                                                    onClick={() => setDurationDays(d.val)}
                                                     style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
                                                 >
                                                     {d.label}
@@ -3121,39 +3187,41 @@
                                             ))}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Custom Minutes:</span>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Custom Days:</span>
                                             <input
                                                 type="number"
-                                                min="5"
-                                                max="720"
-                                                value={durationMinutes}
-                                                onChange={e => setDurationMinutes(parseInt(e.target.value) || 60)}
-                                                style={{ width: '100px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                                min="1"
+                                                max="180"
+                                                value={durationDays}
+                                                onChange={e => setDurationDays(parseInt(e.target.value) || 1)}
+                                                style={{ width: '90px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
                                             />
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>days exclusive allocation</span>
                                         </div>
                                     </div>
 
                                     {/* 4. Purpose & Academic Reason */}
                                     <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                        <label>Academic Purpose</label>
+                                        <label>Academic Purpose / Project Category *</label>
                                         <select
                                             value={purpose}
                                             onChange={e => setPurpose(e.target.value)}
                                         >
-                                            <option value="Final Year Capstone Project Defense">Final Year Capstone Project Defense</option>
-                                            <option value="Remedial Practical Examination">Remedial Practical Examination</option>
-                                            <option value="Special Research Workstation Allocation">Special Research Workstation Allocation</option>
-                                            <option value="Disciplinary / Supervised Lab Session">Disciplinary / Supervised Lab Session</option>
-                                            <option value="Hardware Benchmark & Diagnostics">Hardware Benchmark &amp; Diagnostics</option>
-                                            <option value="Individual Coursework Practice">Individual Coursework Practice</option>
+                                            <option value="Academic Research Work / Thesis">🔬 Academic Research Work / Thesis</option>
+                                            <option value="Final Year Capstone Project">🎓 Final Year Capstone Project</option>
+                                            <option value="Department Sponsored Research">💻 Department Sponsored Research</option>
+                                            <option value="Research Fellowship / Internship">🚀 Research Fellowship / Internship</option>
+                                            <option value="Competitive Hackathon / Innovation Lab">🏆 Competitive Hackathon / Innovation Lab</option>
+                                            <option value="Remedial Practical Examination">📝 Remedial Practical Examination</option>
+                                            <option value="Supervised Academic Lab Session">⚖️ Supervised Academic Lab Session</option>
                                         </select>
                                     </div>
 
                                     <div className="form-group" style={{ marginBottom: '1rem' }}>
-                                        <label>Administrative Notes / Evaluator Remarks</label>
+                                        <label>Academic Reason / Project Title / Remarks *</label>
                                         <textarea
                                             rows="2"
-                                            placeholder="e.g. Approved by Dr. Raman for project evaluation..."
+                                            placeholder="e.g. Distributed LLM Fine-Tuning Thesis under Prof. Raman; autonomous drone navigation capstone evaluation..."
                                             value={customNotes}
                                             onChange={e => setCustomNotes(e.target.value)}
                                             style={{ width: '100%', padding: '0.5rem', fontSize: '0.82rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}
@@ -3182,6 +3250,93 @@
                                         </button>
                                         <button type="submit" className="btn btn-primary" disabled={submittingDedicated}>
                                             {submittingDedicated ? 'Allocating & Locking Workstation...' : '🔒 Confirm & Lock Workstation'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Extend Dedicated Reservation Modal */}
+                    {showExtendModal && extendingRes && (
+                        <div className="modal-overlay" onClick={e => { if (e.target.className === 'modal-overlay') { setShowExtendModal(false); setExtendingRes(null); } }}>
+                            <div className="modal-card" style={{ maxWidth: '540px', width: '92%' }}>
+                                <div className="modal-header">
+                                    <div>
+                                        <h3 className="card-title">Extend Workstation Allocation</h3>
+                                        <p className="card-subtitle">
+                                            Extend dedicated access for <strong>{extendingRes.student_name}</strong> ({extendingRes.roll_no}) on <code>{extendingRes.hostname}</code>
+                                        </p>
+                                    </div>
+                                    <button className="close-btn" onClick={() => { setShowExtendModal(false); setExtendingRes(null); }}>&times;</button>
+                                </div>
+
+                                <form onSubmit={submitExtendReservation}>
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>Current Allocation Window</label>
+                                        <div style={{ padding: '0.55rem 0.75rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)' }}>
+                                            {extendingRes.time_window || '-'} ({extendingRes.remaining_display || 'Active'})
+                                        </div>
+                                    </div>
+
+                                    {/* Extension Duration Chips */}
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>Additional Extension Period</label>
+                                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                            {[
+                                                { label: '+3 Days', val: 3 },
+                                                { label: '+5 Days', val: 5 },
+                                                { label: '+1 Week (7d)', val: 7 },
+                                                { label: '+2 Weeks (14d)', val: 14 },
+                                                { label: '+1 Month (30d)', val: 30 }
+                                            ].map(d => (
+                                                <button
+                                                    key={d.val}
+                                                    type="button"
+                                                    className={`quick-chip-btn ${extendDays === d.val ? 'active' : ''}`}
+                                                    onClick={() => setExtendDays(d.val)}
+                                                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                                                >
+                                                    {d.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Custom Days:</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="180"
+                                                value={extendDays}
+                                                onChange={e => setExtendDays(parseInt(e.target.value) || 1)}
+                                                style={{ width: '90px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                            />
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>days</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Academic Reason / Justification */}
+                                    <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                                        <label>Academic Reason / Milestone Justification *</label>
+                                        <textarea
+                                            rows="3"
+                                            placeholder="e.g. Model training convergence requires additional 5 days; Final Year Project reviewer requested architecture benchmark revisions..."
+                                            value={extendReason}
+                                            onChange={e => setExtendReason(e.target.value)}
+                                            required
+                                            style={{ width: '100%', padding: '0.5rem', fontSize: '0.82rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}
+                                        ></textarea>
+                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                                            Academic audit logs preserve extension reasons for institutional department reporting.
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                                        <button type="button" className="btn btn-outline" onClick={() => { setShowExtendModal(false); setExtendingRes(null); }}>
+                                            Cancel
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={submittingExtend}>
+                                            {submittingExtend ? 'Extending Reservation...' : `Extend by ${extendDays} Days`}
                                         </button>
                                     </div>
                                 </form>

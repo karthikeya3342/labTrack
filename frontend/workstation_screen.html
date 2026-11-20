@@ -81,6 +81,10 @@
                         <span style="font-size: 0.72rem; color: var(--text-muted);">Strict Allocation</span>
                     </div>
 
+                    <div id="heldPurposeBadge" style="display: none; font-size: 0.78rem; font-weight: 700; color: #059669; background: rgba(5, 150, 105, 0.1); border: 1px solid rgba(5, 150, 105, 0.25); border-radius: 6px; padding: 0.35rem 0.65rem; margin-bottom: 0.85rem; line-height: 1.4;">
+                        <span id="heldPurposeText">🔬 Academic Research Work / Thesis</span>
+                    </div>
+
                     <div class="reserved-row">
                         <span class="reserved-label">Assigned Student:</span>
                         <span class="reserved-value" id="heldStudentName">Alice Johnson</span>
@@ -88,6 +92,10 @@
                     <div class="reserved-row">
                         <span class="reserved-label">Roll Number:</span>
                         <span class="reserved-value" id="heldRollNo">STU001</span>
+                    </div>
+                    <div class="reserved-row" id="heldReasonRow" style="display: none;">
+                        <span class="reserved-label">Project / Reason:</span>
+                        <span class="reserved-value" id="heldReasonText">-</span>
                     </div>
                     <div class="reserved-row">
                         <span class="reserved-label" id="heldTimeLabel">Grace Expiry:</span>
@@ -100,7 +108,7 @@
                     </div>
 
                     <div id="heldAdminNotice" style="display: none; font-size: 0.76rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 6px; padding: 0.45rem 0.65rem; margin-top: 0.65rem; line-height: 1.4;">
-                        🔒 <strong>Admin Dedicated Workstation:</strong> Exclusively locked for this student. Other roll numbers will be rejected.
+                        🔒 <strong>Admin Dedicated Workstation:</strong> Exclusively locked for this student. Machine will preserve your allocation even across logouts until the period ends.
                     </div>
                 </div>
 
@@ -392,7 +400,7 @@
 
                 const isDedicated = !!data.is_admin_dedicated;
                 const tagTitle = document.getElementById('heldTagTitle');
-                if (tagTitle) tagTitle.innerText = isDedicated ? "ADMIN DEDICATED RESERVATION" : "ASSIGNED BOOKING";
+                if (tagTitle) tagTitle.innerText = isDedicated ? "ADMIN DEDICATED ALLOCATION" : "ASSIGNED BOOKING";
 
                 const adminNotice = document.getElementById('heldAdminNotice');
                 if (adminNotice) adminNotice.style.display = isDedicated ? "block" : "none";
@@ -403,6 +411,25 @@
                 document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
                 document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
 
+                // Display academic purpose badge & reason
+                const purposeBadge = document.getElementById('heldPurposeBadge');
+                const purposeText = document.getElementById('heldPurposeText');
+                if (data.purpose) {
+                    purposeBadge.style.display = 'block';
+                    purposeText.innerText = data.purpose;
+                } else {
+                    purposeBadge.style.display = 'none';
+                }
+
+                const reasonRow = document.getElementById('heldReasonRow');
+                const reasonText = document.getElementById('heldReasonText');
+                if (data.academic_reason && data.academic_reason.trim()) {
+                    reasonRow.style.display = 'flex';
+                    reasonText.innerText = data.academic_reason;
+                } else {
+                    reasonRow.style.display = 'none';
+                }
+
                 const rollInput = document.getElementById('loginRollInput');
                 if (!rollInput.value) {
                     rollInput.value = data.reserved_roll_no || '';
@@ -411,14 +438,19 @@
                 const timeLabel = document.getElementById('heldTimeLabel');
                 const cdLabel = document.getElementById('heldCountdownLabel');
                 const targetTime = data.reserved_end_time || data.grace_deadline;
-                if (timeLabel) timeLabel.innerText = isDedicated ? "Reserved Until:" : "Grace Expiry:";
-                if (cdLabel) cdLabel.innerText = isDedicated ? "Reservation Window Remaining" : "Hold Grace Period Remaining";
+                if (timeLabel) timeLabel.innerText = isDedicated ? "Allocation Window:" : "Grace Expiry:";
+                if (cdLabel) cdLabel.innerText = isDedicated ? "Allocation Window Remaining" : "Hold Grace Period Remaining";
 
-                if (targetTime) {
-                    document.getElementById('heldGraceTime').innerText = new Date(targetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                if (data.time_window) {
+                    document.getElementById('heldGraceTime').innerText = data.time_window;
+                } else if (targetTime) {
+                    const dt = new Date(targetTime);
+                    document.getElementById('heldGraceTime').innerText = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ' (' + dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')';
                 }
 
                 remainingGraceSeconds = data.remaining_grace_seconds || 0;
+                document.getElementById('graceCountdown').innerText = data.remaining_time_display || formatRemainingCountdown(remainingGraceSeconds);
+
                 document.getElementById('loginRollLabel').innerText = isDedicated ? "Designated Student Roll Number" : "Reserved Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
                 btn.innerText = isDedicated ? "🔓 Unlock Dedicated Workstation" : "🔓 Unlock Reserved Workstation";
@@ -452,6 +484,29 @@
             previousStateKey = stateKey;
         }
 
+        function formatRemainingCountdown(seconds) {
+            if (seconds <= 0) return "Expired";
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (days >= 30) {
+                const months = Math.floor(days / 30);
+                const remDays = days % 30;
+                return remDays > 0 ? `${months} mo ${remDays}d remaining` : `${months} month${months > 1 ? 's' : ''} remaining`;
+            }
+            if (days > 1) {
+                return hours > 0 ? `${days}d ${hours}h remaining` : `${days} days remaining`;
+            }
+            if (days === 1) {
+                return `1 day ${hours}h remaining`;
+            }
+            if (hours > 0) {
+                return `${hours}h ${mins}m ${secs}s`;
+            }
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
         function setWanStatus(unlocked) {
             const pill = document.getElementById('wanPill');
             if (unlocked) {
@@ -466,11 +521,9 @@
         function tickCountdown() {
             if (currentLockState && currentLockState.state === 'HELD' && remainingGraceSeconds > 0) {
                 remainingGraceSeconds--;
-                const mins = Math.floor(remainingGraceSeconds / 60);
-                const secs = remainingGraceSeconds % 60;
                 const cdElem = document.getElementById('graceCountdown');
                 if (cdElem) {
-                    cdElem.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                    cdElem.innerText = formatRemainingCountdown(remainingGraceSeconds);
                 }
             }
         }
