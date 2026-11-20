@@ -1311,3 +1311,59 @@ tr:hover td {
     font-weight: 700;
     box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
+
+/* Quick Extend Action Pills & Dedicated Modal Controls */
+.quick-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    line-height: 1;
+}
+
+.quick-chip-btn:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.quick-chip-btn.active {
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+}
+
+.student-suggestion-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+    background: #f8fafc;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.student-suggestion-chip:hover {
+    background: #f1f5f9;
+    border-color: #0284c7;
+    color: #0284c7;
+}
+
+.student-suggestion-chip.selected {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+

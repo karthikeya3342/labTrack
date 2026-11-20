@@ -41,6 +41,8 @@ class LockStateResponse(BaseModel):
     reserved_roll_no: Optional[str] = None
     grace_deadline: Optional[datetime] = None
     remaining_grace_seconds: Optional[int] = None
+    reserved_end_time: Optional[datetime] = None
+    is_admin_dedicated: Optional[bool] = False
     active_session: Optional[Dict[str, Any]] = None
     latest_telemetry: Optional[Dict[str, Any]] = None
     is_club_event: Optional[bool] = False
@@ -109,3 +111,22 @@ class TelemetrySampleRequest(BaseModel):
     page_faults: int = 0
     process_count: int = 0
     load_average: float = 0.0
+
+# --- Admin Dedicated Reservation Schemas ---
+class AdminDedicatedReservationRequest(BaseModel):
+    student_identifier: str  # Roll number or email
+    pc_id: Optional[int] = None
+    hostname: Optional[str] = None
+    lab_id: Optional[int] = None
+    start_time: Optional[datetime] = None  # None = immediate
+    duration_minutes: Optional[int] = 60
+    end_time: Optional[datetime] = None
+    purpose: Optional[str] = "Admin Dedicated Reservation"
+    notes: Optional[str] = None
+    force_preempt: Optional[bool] = False
+
+class AdminExtendReservationRequest(BaseModel):
+    additional_minutes: Optional[int] = 30
+    new_end_time: Optional[datetime] = None
+    reason: Optional[str] = "Extended by Administrator"
+

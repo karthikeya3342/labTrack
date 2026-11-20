@@ -77,7 +77,7 @@
                 <!-- 2. Individual Student Reservation Context -->
                 <div id="individualHeldContext" class="context-box" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
-                        <span style="font-size: 0.85rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.04em;">Assigned Booking</span>
+                        <span id="heldTagTitle" style="font-size: 0.85rem; font-weight: 700; color: #fbbf24; text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.04em;">Assigned Booking</span>
                         <span style="font-size: 0.72rem; color: var(--text-muted);">Strict Allocation</span>
                     </div>
 
@@ -90,13 +90,17 @@
                         <span class="reserved-value" id="heldRollNo">STU001</span>
                     </div>
                     <div class="reserved-row">
-                        <span class="reserved-label">Grace Expiry:</span>
+                        <span class="reserved-label" id="heldTimeLabel">Grace Expiry:</span>
                         <span class="reserved-value" id="heldGraceTime">10:45 AM</span>
                     </div>
 
                     <div class="countdown-box">
-                        <div class="countdown-label">Hold Grace Period Remaining</div>
+                        <div class="countdown-label" id="heldCountdownLabel">Hold Grace Period Remaining</div>
                         <div class="countdown-timer" id="graceCountdown">14:59</div>
+                    </div>
+
+                    <div id="heldAdminNotice" style="display: none; font-size: 0.76rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 6px; padding: 0.45rem 0.65rem; margin-top: 0.65rem; line-height: 1.4;">
+                        🔒 <strong>Admin Dedicated Workstation:</strong> Exclusively locked for this student. Other roll numbers will be rejected.
                     </div>
                 </div>
 
@@ -382,26 +386,44 @@
                 btn.style.borderColor = "#15803d";
                 setWanStatus(false);
             } else if (data.state === 'HELD') {
-                // Individual Student Reservation mode
+                // Individual / Admin Dedicated Student Reservation mode
                 document.getElementById('loginView').style.display = 'block';
                 document.getElementById('individualHeldContext').style.display = 'block';
-                stateBadge.innerText = "🔒 Workstation Reserved";
+
+                const isDedicated = !!data.is_admin_dedicated;
+                const tagTitle = document.getElementById('heldTagTitle');
+                if (tagTitle) tagTitle.innerText = isDedicated ? "ADMIN DEDICATED RESERVATION" : "ASSIGNED BOOKING";
+
+                const adminNotice = document.getElementById('heldAdminNotice');
+                if (adminNotice) adminNotice.style.display = isDedicated ? "block" : "none";
+
+                stateBadge.innerText = isDedicated ? "🔒 Reserved by Admin" : "🔒 Workstation Reserved";
                 stateBadge.className = 'state-banner banner-HELD';
+
                 document.getElementById('heldStudentName').innerText = data.reserved_student_name || 'Assigned Student';
                 document.getElementById('heldRollNo').innerText = data.reserved_roll_no || '-';
+
                 const rollInput = document.getElementById('loginRollInput');
                 if (!rollInput.value) {
                     rollInput.value = data.reserved_roll_no || '';
                 }
-                if (data.grace_deadline) {
-                    document.getElementById('heldGraceTime').innerText = new Date(data.grace_deadline).toLocaleTimeString();
+
+                const timeLabel = document.getElementById('heldTimeLabel');
+                const cdLabel = document.getElementById('heldCountdownLabel');
+                const targetTime = data.reserved_end_time || data.grace_deadline;
+                if (timeLabel) timeLabel.innerText = isDedicated ? "Reserved Until:" : "Grace Expiry:";
+                if (cdLabel) cdLabel.innerText = isDedicated ? "Reservation Window Remaining" : "Hold Grace Period Remaining";
+
+                if (targetTime) {
+                    document.getElementById('heldGraceTime').innerText = new Date(targetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 }
+
                 remainingGraceSeconds = data.remaining_grace_seconds || 0;
-                document.getElementById('loginRollLabel').innerText = "Reserved Student Roll Number";
+                document.getElementById('loginRollLabel').innerText = isDedicated ? "Designated Student Roll Number" : "Reserved Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
-                btn.innerText = "🔓 Unlock Reserved Workstation";
-                btn.style.backgroundColor = "#d97706";
-                btn.style.borderColor = "#d97706";
+                btn.innerText = isDedicated ? "🔓 Unlock Dedicated Workstation" : "🔓 Unlock Reserved Workstation";
+                btn.style.backgroundColor = isDedicated ? "#d97706" : "#d97706";
+                btn.style.borderColor = isDedicated ? "#d97706" : "#d97706";
                 setWanStatus(false);
             } else {
                 // Available Walk-in mode

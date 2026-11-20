@@ -258,6 +258,8 @@ DECLARE
     v_sw_array TEXT[];
     v_sw_item TEXT;
     v_now TIMESTAMPTZ := CURRENT_TIMESTAMP;
+    v_alloc_basis TEXT := NULL;
+    v_time_range TSTZRANGE := NULL;
 BEGIN
     SELECT pc_id, user_id, reservation_id
     INTO v_pc_id, v_user_id, v_res_id
@@ -275,8 +277,16 @@ BEGIN
 
     -- Update reservation if linked
     IF v_res_id IS NOT NULL THEN
-        SELECT software_required INTO v_sw_array FROM reservations WHERE id = v_res_id;
-        UPDATE reservations SET status = 'COMPLETED', updated_at = v_now WHERE id = v_res_id;
+        SELECT software_required, allocation_basis, time_range
+        INTO v_sw_array, v_alloc_basis, v_time_range
+        FROM reservations WHERE id = v_res_id;
+
+        IF v_alloc_basis = 'ADMIN_DEDICATED' AND v_now < upper(v_time_range) THEN
+            -- Preserve dedicated student reservation hold for remaining window
+            UPDATE reservations SET status = 'HELD', updated_at = v_now WHERE id = v_res_id;
+        ELSE
+            UPDATE reservations SET status = 'COMPLETED', updated_at = v_now WHERE id = v_res_id;
+        END IF;
     END IF;
 
     -- Check if PC belongs to an ongoing approved club event
@@ -303,6 +313,9 @@ BEGIN
             FROM club_events ce WHERE ce.id = v_club_event_id
             ON CONFLICT DO NOTHING;
         END IF;
+    ELSIF v_alloc_basis = 'ADMIN_DEDICATED' AND v_now < upper(v_time_range) THEN
+        -- Revert workstation to HELD for the dedicated student
+        UPDATE pcs SET state = 'HELD', updated_at = v_now WHERE id = v_pc_id;
     ELSE
         -- Restore Workstation state to AVAILABLE
         UPDATE pcs SET state = 'AVAILABLE', updated_at = v_now WHERE id = v_pc_id;

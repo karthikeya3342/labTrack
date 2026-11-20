@@ -428,6 +428,7 @@
                         {activeTab === 'admin' && (
                             <TabAdmin
                                 token={token}
+                                labs={labs}
                                 events={clubEvents}
                                 workstations={workstations}
                                 onRefresh={() => {
@@ -2096,18 +2097,191 @@
         }
 
         /* TAB 6: ADMIN OPERATIONS */
-        function TabAdmin({ token, events, workstations, onRefresh, notify }) {
+        function TabAdmin({ token, labs = [], events, workstations, onRefresh, notify }) {
             const pendingEvents = events.filter(e => e.status === 'PENDING');
             const approvedEvents = events.filter(e => e.status === 'APPROVED');
             const [selectedEventRoster, setSelectedEventRoster] = useState(null);
             const [loadingRoster, setLoadingRoster] = useState(false);
             const [rosterData, setRosterData] = useState(null);
 
+            // Dedicated Reservations State
+            const [dedicatedReservations, setDedicatedReservations] = useState([]);
+            const [loadingDedicated, setLoadingDedicated] = useState(false);
+            const [dedicatedFilter, setDedicatedFilter] = useState('active'); // 'active' | 'all'
+
+            // Dedicated Reservation Modal State
+            const [showReserveModal, setShowReserveModal] = useState(false);
+            const [studentQuery, setStudentQuery] = useState('');
+            const [studentSuggestions, setStudentSuggestions] = useState([]);
+            const [searchingStudents, setSearchingStudents] = useState(false);
+            const [selectedStudent, setSelectedStudent] = useState(null);
+            const [allocMode, setAllocMode] = useState('auto'); // 'auto' | 'specific'
+            const [selectedLabId, setSelectedLabId] = useState('');
+            const [selectedPcId, setSelectedPcId] = useState('');
+            const [durationMinutes, setDurationMinutes] = useState(60);
+            const [purpose, setPurpose] = useState('Final Year Capstone Project Defense');
+            const [customNotes, setCustomNotes] = useState('');
+            const [forcePreempt, setForcePreempt] = useState(false);
+            const [submittingDedicated, setSubmittingDedicated] = useState(false);
+
             // Admin tab & fleet filter states
             const [eventTab, setEventTab] = useState('pending'); // 'pending' | 'active'
             const [selectedLabFilter, setSelectedLabFilter] = useState('all');
             const [pcStateFilter, setPcStateFilter] = useState('all'); // 'all' | 'OPERATIONAL' | 'MAINTENANCE'
             const [searchQuery, setSearchQuery] = useState('');
+
+            const fetchDedicated = async () => {
+                setLoadingDedicated(true);
+                try {
+                    const res = await fetch('/api/admin/reservations/dedicated', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setDedicatedReservations(data);
+                    }
+                } catch(e) {
+                    console.error("Failed to load dedicated reservations", e);
+                } finally {
+                    setLoadingDedicated(false);
+                }
+            };
+
+            useEffect(() => {
+                fetchDedicated();
+            }, []);
+
+            const searchStudents = async (q) => {
+                setStudentQuery(q);
+                setSelectedStudent(null);
+                if (!q.trim() || q.trim().length < 2) {
+                    setStudentSuggestions([]);
+                    return;
+                }
+                setSearchingStudents(true);
+                try {
+                    const res = await fetch(`/api/admin/students/search?q=${encodeURIComponent(q.trim())}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setStudentSuggestions(data);
+                    }
+                } catch(e) {
+                    console.error("Student search error", e);
+                } finally {
+                    setSearchingStudents(false);
+                }
+            };
+
+            const handleSelectStudent = (stu) => {
+                setSelectedStudent(stu);
+                setStudentQuery(`${stu.roll_no} - ${stu.name}`);
+                setStudentSuggestions([]);
+            };
+
+            const resetModal = () => {
+                setStudentQuery('');
+                setStudentSuggestions([]);
+                setSelectedStudent(null);
+                setAllocMode('auto');
+                setSelectedLabId(labs.length > 0 ? labs[0].id : '');
+                setSelectedPcId('');
+                setDurationMinutes(60);
+                setPurpose('Final Year Capstone Project Defense');
+                setCustomNotes('');
+                setForcePreempt(false);
+                setSubmittingDedicated(false);
+            };
+
+            const submitDedicatedReservation = async (e) => {
+                if (e) e.preventDefault();
+                const identifier = selectedStudent ? selectedStudent.roll_no : studentQuery.trim().split(' ')[0];
+                if (!identifier) {
+                    notify('danger', 'Please enter or select a student roll number or email.');
+                    return;
+                }
+
+                setSubmittingDedicated(true);
+                try {
+                    const payload = {
+                        student_identifier: identifier,
+                        pc_id: allocMode === 'specific' && selectedPcId ? parseInt(selectedPcId) : null,
+                        lab_id: selectedLabId ? parseInt(selectedLabId) : null,
+                        duration_minutes: parseInt(durationMinutes) || 60,
+                        purpose: purpose,
+                        notes: customNotes.trim() || null,
+                        force_preempt: forcePreempt
+                    };
+
+                    const res = await fetch('/api/admin/reservations/dedicated', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    if (res.ok) {
+                        notify('success', data.message || 'Workstation dedicated successfully!');
+                        setShowReserveModal(false);
+                        resetModal();
+                        fetchDedicated();
+                        onRefresh();
+                    } else {
+                        notify('danger', data.detail || 'Failed to create dedicated reservation.');
+                    }
+                } catch(e) {
+                    notify('danger', 'Network error creating dedicated reservation.');
+                } finally {
+                    setSubmittingDedicated(false);
+                }
+            };
+
+            const handleQuickExtend = async (resId, minutes) => {
+                try {
+                    const res = await fetch(`/api/admin/reservations/${resId}/extend`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ additional_minutes: minutes })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        notify('success', data.message || `Extended by ${minutes} minutes!`);
+                        fetchDedicated();
+                        onRefresh();
+                    } else {
+                        notify('danger', data.detail || 'Failed to extend reservation.');
+                    }
+                } catch(e) {
+                    notify('danger', 'Network error extending reservation.');
+                }
+            };
+
+            const handleReleaseDedicated = async (resId, hostname, studentName) => {
+                if (!confirm(`Release dedicated reservation for ${studentName} on ${hostname}?\n\nThe workstation will immediately unlock and return to AVAILABLE walk-in mode.`)) return;
+                try {
+                    const res = await fetch(`/api/admin/reservations/${resId}/release`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        notify('success', data.message || `Workstation ${hostname} released to walk-in mode.`);
+                        fetchDedicated();
+                        onRefresh();
+                    } else {
+                        notify('danger', data.detail || 'Failed to release reservation.');
+                    }
+                } catch(e) {
+                    notify('danger', 'Network error releasing reservation.');
+                }
+            };
 
             const fetchRoster = async (eventId, evTitle) => {
                 setLoadingRoster(true);
@@ -2296,6 +2470,15 @@
 
                         <div className="stat-card">
                             <div className="stat-header">
+                                <span className="stat-tag stat-tag-held">DEDICATED HOLDS</span>
+                                <span className="stat-pct">{dedicatedReservations.filter(r => ['HELD', 'ACTIVE'].includes(r.status)).length} ACTIVE</span>
+                            </div>
+                            <div className="stat-value">{dedicatedReservations.filter(r => ['HELD', 'ACTIVE'].includes(r.status)).length}<span className="stat-unit">PCs</span></div>
+                            <div className="stat-desc">Workstations locked for specific students</div>
+                        </div>
+
+                        <div className="stat-card">
+                            <div className="stat-header">
                                 <span className="stat-tag stat-tag-avail">FLEET HEALTH</span>
                                 <span className="stat-pct">{fleetHealthPct}% ONLINE</span>
                             </div>
@@ -2316,6 +2499,178 @@
                         <button className="btn btn-danger" onClick={handleReleaseAll}>
                             Master Reset Fleet to Walk-in Mode
                         </button>
+                    </div>
+
+                    {/* Dedicated Student Workstation Reservations Card */}
+                    <div className="card">
+                        <div className="card-header">
+                            <div>
+                                <h2 className="card-title">Dedicated Student Workstation Reservations</h2>
+                                <p className="card-subtitle">Exclusively lock individual workstations for specific students with preemption protection, live extensions, and instant release.</p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div className="segmented-control">
+                                    <button
+                                        className={`segmented-tab-btn ${dedicatedFilter === 'active' ? 'active' : ''}`}
+                                        onClick={() => setDedicatedFilter('active')}
+                                    >
+                                        Active / Held ({dedicatedReservations.filter(r => ['HELD', 'ACTIVE', 'PENDING'].includes(r.status)).length})
+                                    </button>
+                                    <button
+                                        className={`segmented-tab-btn ${dedicatedFilter === 'all' ? 'active' : ''}`}
+                                        onClick={() => setDedicatedFilter('all')}
+                                    >
+                                        All ({dedicatedReservations.length})
+                                    </button>
+                                </div>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={() => { resetModal(); setShowReserveModal(true); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}
+                                >
+                                    <span>+ Reserve PC for Student</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Dedicated Reservations Content */}
+                        {(() => {
+                            const filtered = dedicatedReservations.filter(r => {
+                                if (dedicatedFilter === 'active') return ['HELD', 'ACTIVE', 'PENDING'].includes(r.status);
+                                return true;
+                            });
+
+                            if (loadingDedicated) {
+                                return <div style={{ padding: '2.5rem', textAlign: 'center', color: '#64748b' }}>Loading dedicated reservations...</div>;
+                            }
+
+                            if (filtered.length === 0) {
+                                return (
+                                    <div style={{ padding: '2.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
+                                        <div style={{ fontSize: '1.8rem', marginBottom: '0.4rem' }}>💻</div>
+                                        <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.25rem' }}>No Dedicated Reservations Under This Filter</div>
+                                        <div style={{ fontSize: '0.85rem', marginBottom: '1rem' }}>No campus workstations are currently locked for individual student reservations.</div>
+                                        <button className="btn btn-outline btn-sm" onClick={() => { resetModal(); setShowReserveModal(true); }}>
+                                            + Reserve Workstation for Student
+                                        </button>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div className="table-wrap">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Student</th>
+                                                <th>Workstation &amp; Lab</th>
+                                                <th>Scheduled Window</th>
+                                                <th>Status &amp; Remaining</th>
+                                                <th>Academic Purpose</th>
+                                                <th>Operational Controls</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {filtered.map(res => {
+                                                const isLive = ['HELD', 'ACTIVE', 'PENDING'].includes(res.status);
+                                                const remMins = Math.ceil((res.remaining_seconds || 0) / 60);
+
+                                                return (
+                                                    <tr key={res.id}>
+                                                        <td>
+                                                            <div>
+                                                                <strong>{res.student_name}</strong>
+                                                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                                    {res.roll_no} • {res.student_email}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                                <code>{res.hostname}</code>
+                                                                <span className="lab-chip-tag">{res.lab_name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 600 }}>
+                                                                {res.time_window || '-'}
+                                                            </div>
+                                                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                                                {res.start_time ? new Date(res.start_time).toLocaleDateString() : ''}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            {res.status === 'HELD' && (
+                                                                <span className="status-badge badge-HELD">
+                                                                    🔒 HELD ({remMins > 0 ? `${remMins}m left` : 'Awaiting Student'})
+                                                                </span>
+                                                            )}
+                                                            {res.status === 'ACTIVE' && (
+                                                                <span className="status-badge badge-AVAILABLE">
+                                                                    🟢 ACTIVE • In Session ({remMins}m left)
+                                                                </span>
+                                                            )}
+                                                            {res.status === 'PENDING' && (
+                                                                <span className="status-badge" style={{ background: '#f0fdf4', color: '#0284c7', borderColor: '#bae6fd' }}>
+                                                                    ⏳ SCHEDULED
+                                                                </span>
+                                                            )}
+                                                            {res.status === 'COMPLETED' && (
+                                                                <span className="status-badge badge-MAINTENANCE">COMPLETED</span>
+                                                            )}
+                                                            {res.status === 'CANCELLED' && (
+                                                                <span className="status-badge badge-MAINTENANCE">CANCELLED</span>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ fontSize: '0.82rem', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={res.notes}>
+                                                                {res.notes || 'Admin Dedicated'}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            {isLive ? (
+                                                                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                                                    <button
+                                                                        className="quick-chip-btn"
+                                                                        onClick={() => handleQuickExtend(res.id, 30)}
+                                                                        title="Extend by 30 minutes"
+                                                                    >
+                                                                        +30m
+                                                                    </button>
+                                                                    <button
+                                                                        className="quick-chip-btn"
+                                                                        onClick={() => handleQuickExtend(res.id, 60)}
+                                                                        title="Extend by 1 hour"
+                                                                    >
+                                                                        +1h
+                                                                    </button>
+                                                                    <button
+                                                                        className="quick-chip-btn"
+                                                                        onClick={() => handleQuickExtend(res.id, 120)}
+                                                                        title="Extend by 2 hours"
+                                                                    >
+                                                                        +2h
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-danger btn-sm"
+                                                                        onClick={() => handleReleaseDedicated(res.id, res.hostname, res.student_name)}
+                                                                        style={{ marginLeft: '0.2rem' }}
+                                                                    >
+                                                                        Release
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Concluded</span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Technical Club Workshops & Proposals Management */}
@@ -2643,6 +2998,196 @@
                             </table>
                         </div>
                     </div>
+
+                    {/* Dedicated Reservation Modal */}
+                    {showReserveModal && (
+                        <div className="modal-overlay" onClick={e => { if (e.target.className === 'modal-overlay') setShowReserveModal(false); }}>
+                            <div className="modal-card" style={{ maxWidth: '640px', width: '92%' }}>
+                                <div className="modal-header">
+                                    <div>
+                                        <h3 className="card-title">Reserve Workstation for Student</h3>
+                                        <p className="card-subtitle">Lock an individual computer exclusively for an academic student session.</p>
+                                    </div>
+                                    <button className="close-btn" onClick={() => setShowReserveModal(false)}>&times;</button>
+                                </div>
+
+                                <form onSubmit={submitDedicatedReservation}>
+                                    {/* 1. Student Search & Selection */}
+                                    <div className="form-group" style={{ marginBottom: '1rem', position: 'relative' }}>
+                                        <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Student Roll Number or Email *</span>
+                                            {selectedStudent && (
+                                                <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.75rem' }}>
+                                                    ✓ {selectedStudent.name} ({selectedStudent.roll_no})
+                                                </span>
+                                            )}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="Type roll number or name (e.g. STU001 or Alice)..."
+                                            value={studentQuery}
+                                            onChange={e => searchStudents(e.target.value)}
+                                            required
+                                            autoComplete="off"
+                                        />
+                                        {/* Live suggestions */}
+                                        {studentSuggestions.length > 0 && (
+                                            <div style={{ marginTop: '0.4rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                                {studentSuggestions.map(stu => (
+                                                    <div
+                                                        key={stu.id}
+                                                        className={`student-suggestion-chip ${selectedStudent && selectedStudent.id === stu.id ? 'selected' : ''}`}
+                                                        onClick={() => handleSelectStudent(stu)}
+                                                    >
+                                                        <strong>{stu.roll_no}</strong> • {stu.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 2. Allocation Mode & Workstation Selection */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                                        <div className="form-group">
+                                            <label>Target Laboratory</label>
+                                            <select
+                                                value={selectedLabId}
+                                                onChange={e => {
+                                                    setSelectedLabId(e.target.value);
+                                                    setSelectedPcId('');
+                                                }}
+                                            >
+                                                <option value="">Any Available Laboratory</option>
+                                                {labs.map(l => (
+                                                    <option key={l.id} value={l.id}>
+                                                        {l.name} ({l.code})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Allocation Strategy</label>
+                                            <select
+                                                value={allocMode}
+                                                onChange={e => setAllocMode(e.target.value)}
+                                            >
+                                                <option value="auto">⚡ Auto-Assign Best Available PC</option>
+                                                <option value="specific">🎯 Select Specific Workstation</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {allocMode === 'specific' && (
+                                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                            <label>Specific Workstation *</label>
+                                            <select
+                                                value={selectedPcId}
+                                                onChange={e => setSelectedPcId(e.target.value)}
+                                                required={allocMode === 'specific'}
+                                            >
+                                                <option value="">-- Choose Workstation --</option>
+                                                {workstations
+                                                    .filter(w => !selectedLabId || String(w.lab_id) === String(selectedLabId))
+                                                    .map(w => (
+                                                        <option key={w.id} value={w.id} disabled={w.state === 'MAINTENANCE'}>
+                                                            {w.hostname} ({w.lab_name}) — [{w.state}]{w.has_gpu ? ' ⚡ GPU' : ''}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* 3. Duration Selection */}
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>Reservation Duration</label>
+                                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                                            {[
+                                                { label: '30 min', val: 30 },
+                                                { label: '1 hour', val: 60 },
+                                                { label: '2 hours', val: 120 },
+                                                { label: '4 hours', val: 240 },
+                                                { label: 'All Day (8h)', val: 480 }
+                                            ].map(d => (
+                                                <button
+                                                    key={d.val}
+                                                    type="button"
+                                                    className={`quick-chip-btn ${durationMinutes === d.val ? 'active' : ''}`}
+                                                    onClick={() => setDurationMinutes(d.val)}
+                                                    style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                                                >
+                                                    {d.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Custom Minutes:</span>
+                                            <input
+                                                type="number"
+                                                min="5"
+                                                max="720"
+                                                value={durationMinutes}
+                                                onChange={e => setDurationMinutes(parseInt(e.target.value) || 60)}
+                                                style={{ width: '100px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* 4. Purpose & Academic Reason */}
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>Academic Purpose</label>
+                                        <select
+                                            value={purpose}
+                                            onChange={e => setPurpose(e.target.value)}
+                                        >
+                                            <option value="Final Year Capstone Project Defense">Final Year Capstone Project Defense</option>
+                                            <option value="Remedial Practical Examination">Remedial Practical Examination</option>
+                                            <option value="Special Research Workstation Allocation">Special Research Workstation Allocation</option>
+                                            <option value="Disciplinary / Supervised Lab Session">Disciplinary / Supervised Lab Session</option>
+                                            <option value="Hardware Benchmark & Diagnostics">Hardware Benchmark &amp; Diagnostics</option>
+                                            <option value="Individual Coursework Practice">Individual Coursework Practice</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>Administrative Notes / Evaluator Remarks</label>
+                                        <textarea
+                                            rows="2"
+                                            placeholder="e.g. Approved by Dr. Raman for project evaluation..."
+                                            value={customNotes}
+                                            onChange={e => setCustomNotes(e.target.value)}
+                                            style={{ width: '100%', padding: '0.5rem', fontSize: '0.82rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}
+                                        ></textarea>
+                                    </div>
+
+                                    {/* 5. Preemption Override */}
+                                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem', marginBottom: '1.25rem' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', margin: 0 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={forcePreempt}
+                                                onChange={e => setForcePreempt(e.target.checked)}
+                                                style={{ width: '16px', height: '16px' }}
+                                            />
+                                            <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>Force Preempt Active Walk-in Users</span>
+                                        </label>
+                                        <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.25rem', paddingLeft: '1.6rem' }}>
+                                            If checked, any student currently using the selected machine in walk-in mode will have their session concluded gracefully, and the machine will immediately lock for the reserved student.
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                                        <button type="button" className="btn btn-outline" onClick={() => setShowReserveModal(false)}>
+                                            Cancel
+                                        </button>
+                                        <button type="submit" className="btn btn-primary" disabled={submittingDedicated}>
+                                            {submittingDedicated ? 'Allocating & Locking Workstation...' : '🔒 Confirm & Lock Workstation'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }

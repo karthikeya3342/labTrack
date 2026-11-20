@@ -36,6 +36,7 @@ async def get_workstations(lab_id: Optional[int] = None):
                r.id as held_reservation_id, u_res.name as held_student_name, u_res.roll_no as held_roll_no,
                u_res.role as held_user_role, r.batch_name as held_batch_name, r.notes as held_notes,
                r.task_type as held_task_type, r.club_event_id as held_club_event_id,
+               r.allocation_basis as held_allocation_basis,
                c.name as held_club_name, ce.title as held_event_title,
                lower(r.time_range) as held_start_time, upper(r.time_range) as held_end_time,
                r.grace_deadline as held_grace_deadline,
@@ -137,9 +138,10 @@ async def get_workstations(lab_id: Optional[int] = None):
                     "grace_deadline": row["held_grace_deadline"].isoformat() if row["held_grace_deadline"] else None
                 }
             else:
+                is_admin_hold = (row.get("held_allocation_basis") == "ADMIN_DEDICATED" or "Admin Dedicated" in (row.get("held_notes") or ""))
                 held_info = {
                     "reservation_id": row["held_reservation_id"],
-                    "hold_type": "student",
+                    "hold_type": "admin_dedicated" if is_admin_hold else "student",
                     "who": f"{row['held_student_name']} ({row['held_roll_no']})" if row["held_student_name"] else "Reserved Student",
                     "student_name": row["held_student_name"],
                     "roll_no": row["held_roll_no"],
@@ -147,6 +149,7 @@ async def get_workstations(lab_id: Optional[int] = None):
                     "start_time": st_iso,
                     "end_time": et_iso,
                     "time_window": time_str,
+                    "is_admin_dedicated": is_admin_hold,
                     "grace_deadline": row["held_grace_deadline"].isoformat() if row["held_grace_deadline"] else None
                 }
 
@@ -235,7 +238,7 @@ async def get_pc_lock_state(hostname: str):
     elif state == "HELD":
         # Fetch unexpired individual student reservation, faculty session, or club event
         res = await fetch_one("""
-            SELECT r.id, r.grace_deadline, r.batch_name, r.notes, r.task_type,
+            SELECT r.id, r.grace_deadline, r.batch_name, r.notes, r.task_type, r.allocation_basis,
                    u.name as student_name, u.roll_no, u.role as user_role,
                    r.club_event_id, ce.title as event_title, c.name as club_name,
                    c.slug as club_slug, c.logo_url as club_logo_url,
@@ -273,11 +276,20 @@ async def get_pc_lock_state(hostname: str):
                 resp.reserved_student_name = res["student_name"]
                 resp.reserved_roll_no = res["roll_no"]
                 resp.grace_deadline = res["grace_deadline"]
+                resp.reserved_end_time = res["end_time"]
+                is_admin = (res["allocation_basis"] == "ADMIN_DEDICATED" or "Admin Dedicated" in (res["notes"] or ""))
+                resp.is_admin_dedicated = is_admin
                 resp.purpose = res["notes"] or res["task_type"] or "Workstation Booking"
                 if res["grace_deadline"]:
                     diff = (res["grace_deadline"] - now).total_seconds()
                     resp.remaining_grace_seconds = max(0, int(diff))
-                resp.message = f"🔒 Workstation Reserved for {res['student_name']} ({res['roll_no']})"
+                elif res["end_time"]:
+                    diff = (res["end_time"] - now).total_seconds()
+                    resp.remaining_grace_seconds = max(0, int(diff))
+                if is_admin:
+                    resp.message = f"🔒 Workstation Reserved by Admin for {res['student_name']} ({res['roll_no']})"
+                else:
+                    resp.message = f"🔒 Workstation Reserved for {res['student_name']} ({res['roll_no']})"
         else:
             # Self-healing: HELD state is stale, in the future, or grace deadline passed
             await execute("UPDATE pcs SET state = 'AVAILABLE', updated_at = CURRENT_TIMESTAMP WHERE id = $1", pc["id"])

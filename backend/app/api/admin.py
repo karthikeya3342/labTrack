@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from backend.app.core.security import get_current_user_token_payload
 from backend.app.core.database import fetch_all, fetch_one, execute, fetch_val
 from backend.app.core.lifecycle import reap_expired_allocations
+from backend.app.models.schemas import AdminDedicatedReservationRequest, AdminExtendReservationRequest
 
 router = APIRouter(prefix="/admin", tags=["Admin Operations"])
 
@@ -318,5 +319,509 @@ async def release_all_system_holds(
         "status": "success",
         "message": "All holds, reservations, and club events cleared. All workstations restored to AVAILABLE for walk-in kiosks."
     }
+
+# --- Dedicated Student Workstation Reservations ---
+
+@router.get("/students/search")
+async def search_students(
+    q: str = "",
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    """
+    Search students by roll number or name for dedicated workstation reservation assignment.
+    """
+    verify_admin(payload)
+    query = f"%{q.strip()}%" if q.strip() else "%"
+    users = await fetch_all("""
+        SELECT id, roll_no, name, email, role, is_active
+        FROM users
+        WHERE (roll_no ILIKE $1 OR name ILIKE $1 OR email ILIKE $1)
+          AND is_active = TRUE
+        ORDER BY roll_no ASC
+        LIMIT 20;
+    """, query)
+    return users
+
+
+@router.get("/reservations/dedicated")
+async def list_dedicated_reservations(
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    """
+    List all active, pending, and historical dedicated workstation reservations created by administrators.
+    """
+    verify_admin(payload)
+    await reap_expired_allocations()
+
+    now = datetime.now(timezone.utc)
+    rows = await fetch_all("""
+        SELECT r.id, r.pc_id, p.hostname, p.lab_id, l.name as lab_name,
+               r.student_id, u.name as student_name, u.roll_no, u.email as student_email,
+               lower(r.time_range) as start_time,
+               upper(r.time_range) as end_time,
+               r.status, r.notes, r.allocation_basis, r.grace_deadline,
+               r.created_at,
+               p.state as pc_state,
+               s.id as active_session_id
+        FROM reservations r
+        JOIN pcs p ON p.id = r.pc_id
+        JOIN labs l ON l.id = p.lab_id
+        JOIN users u ON u.id = r.student_id
+        LEFT JOIN sessions s ON s.reservation_id = r.id AND s.status = 'ACTIVE'
+        WHERE r.allocation_basis = 'ADMIN_DEDICATED' OR r.notes LIKE 'Admin Dedicated%'
+        ORDER BY (r.status IN ('HELD', 'ACTIVE', 'PENDING')) DESC, r.created_at DESC
+        LIMIT 100;
+    """)
+
+    results = []
+    for row in rows:
+        st = row["start_time"]
+        et = row["end_time"]
+        if st and st.tzinfo is None:
+            st = st.replace(tzinfo=timezone.utc)
+        if et and et.tzinfo is None:
+            et = et.replace(tzinfo=timezone.utc)
+
+        remaining_seconds = 0
+        if et and et > now and row["status"] in ("HELD", "ACTIVE", "PENDING"):
+            remaining_seconds = max(0, int((et - now).total_seconds()))
+
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        st_ist = st.astimezone(ist_tz) if st else None
+        et_ist = et.astimezone(ist_tz) if et else None
+        time_str = f"{st_ist.strftime('%I:%M %p')} - {et_ist.strftime('%I:%M %p')}" if (st_ist and et_ist) else ""
+
+        results.append({
+            "id": row["id"],
+            "pc_id": row["pc_id"],
+            "hostname": row["hostname"],
+            "lab_id": row["lab_id"],
+            "lab_name": row["lab_name"],
+            "student_id": row["student_id"],
+            "student_name": row["student_name"],
+            "roll_no": row["roll_no"],
+            "student_email": row["student_email"],
+            "start_time": st.isoformat() if st else None,
+            "end_time": et.isoformat() if et else None,
+            "time_window": time_str,
+            "remaining_seconds": remaining_seconds,
+            "status": row["status"],
+            "notes": row["notes"],
+            "pc_state": row["pc_state"],
+            "active_session_id": row["active_session_id"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None
+        })
+
+    return results
+
+
+@router.post("/reservations/dedicated")
+async def create_dedicated_reservation(
+    req: AdminDedicatedReservationRequest,
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    """
+    Reserve a workstation exclusively for a specific student for a given time window.
+    Handles auto-allocation, clash prevention, active session preemption, and kiosk lock status.
+    """
+    verify_admin(payload)
+    await reap_expired_allocations()
+
+    # 1. Identify and validate student
+    clean_ident = req.student_identifier.strip()
+    student = await fetch_one("""
+        SELECT id, roll_no, name, email, role, is_active
+        FROM users
+        WHERE (roll_no ILIKE $1 OR email ILIKE $1) AND is_active = TRUE
+        LIMIT 1;
+    """, clean_ident)
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Student with identifier '{clean_ident}' not found or inactive."
+        )
+
+    # 2. Compute time window
+    now = datetime.now(timezone.utc)
+    start_time = req.start_time or now
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+
+    if req.end_time:
+        end_time = req.end_time
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=timezone.utc)
+    else:
+        duration_mins = max(5, req.duration_minutes or 60)
+        end_time = start_time + timedelta(minutes=duration_mins)
+
+    if end_time <= start_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reservation end time must be after start time."
+        )
+
+    if end_time <= now:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reservation end time cannot be in the past."
+        )
+
+    # 3. Prevent double-booking: Check if student already has a reservation on another PC during this window
+    student_clash = await fetch_one("""
+        SELECT r.id, p.hostname, lower(r.time_range) as st, upper(r.time_range) as et
+        FROM reservations r
+        JOIN pcs p ON p.id = r.pc_id
+        WHERE r.student_id = $1
+          AND r.status IN ('PENDING', 'HELD', 'ACTIVE')
+          AND r.time_range && tstzrange($2, $3, '[)')
+        LIMIT 1;
+    """, student["id"], start_time, end_time)
+    if student_clash:
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        st_ist = student_clash["st"].astimezone(ist_tz).strftime('%I:%M %p')
+        et_ist = student_clash["et"].astimezone(ist_tz).strftime('%I:%M %p')
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Student {student['name']} ({student['roll_no']}) already has an active reservation on {student_clash['hostname']} ({st_ist} - {et_ist})."
+        )
+
+    # 4. Resolve Workstation (explicit target or auto-allocate from lab)
+    target_pc = None
+    if req.pc_id or req.hostname:
+        if req.pc_id:
+            target_pc = await fetch_one("SELECT id, hostname, lab_id, state FROM pcs WHERE id = $1", req.pc_id)
+        else:
+            target_pc = await fetch_one("SELECT id, hostname, lab_id, state FROM pcs WHERE hostname = $1", req.hostname.strip())
+        if not target_pc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Specified workstation not found.")
+        if target_pc["state"] == "MAINTENANCE":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Workstation {target_pc['hostname']} is flagged for hardware maintenance.")
+    else:
+        # Auto-pick best PC in requested lab (or any lab)
+        target_pc = await fetch_one("""
+            SELECT p.id, p.hostname, p.lab_id, p.state
+            FROM pcs p
+            WHERE ($1::int IS NULL OR p.lab_id = $1)
+              AND p.state != 'MAINTENANCE'
+              AND NOT EXISTS (
+                  SELECT 1 FROM reservations r
+                  WHERE r.pc_id = p.id
+                    AND r.status IN ('PENDING', 'HELD', 'ACTIVE')
+                    AND r.time_range && tstzrange($2, $3, '[)')
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM club_events ce
+                  WHERE (ce.lab_id = p.lab_id OR ce.secondary_lab_id = p.lab_id)
+                    AND ce.status = 'APPROVED'
+                    AND ce.time_range && tstzrange($2, $3, '[)')
+              )
+            ORDER BY (p.state = 'AVAILABLE') DESC, p.id ASC
+            LIMIT 1;
+        """, req.lab_id, start_time, end_time)
+
+        if not target_pc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No available workstations in the specified lab without schedule conflicts for this time window."
+            )
+
+    pc_id = target_pc["id"]
+
+    # 5. Check PC clash with approved Club Events
+    club_clash = await fetch_one("""
+        SELECT ce.id, ce.title, c.name as club_name
+        FROM club_events ce
+        JOIN clubs c ON c.id = ce.club_id
+        WHERE (ce.lab_id = $1 OR ce.secondary_lab_id = $1)
+          AND ce.status = 'APPROVED'
+          AND ce.time_range && tstzrange($2, $3, '[)')
+        LIMIT 1;
+    """, target_pc["lab_id"], start_time, end_time)
+    if club_clash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Workstation {target_pc['hostname']} is in a laboratory reserved for club event: '{club_clash['club_name']} - {club_clash['title']}'."
+        )
+
+    # 6. Check PC clash with other reservations
+    pc_res_clash = await fetch_one("""
+        SELECT r.id, r.status, r.notes, u.name as reserved_name, u.roll_no,
+               lower(r.time_range) as st, upper(r.time_range) as et
+        FROM reservations r
+        LEFT JOIN users u ON u.id = r.student_id
+        WHERE r.pc_id = $1
+          AND r.status IN ('PENDING', 'HELD', 'ACTIVE')
+          AND r.time_range && tstzrange($2, $3, '[)')
+        LIMIT 1;
+    """, pc_id, start_time, end_time)
+    if pc_res_clash:
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        st_ist = pc_res_clash["st"].astimezone(ist_tz).strftime('%I:%M %p')
+        et_ist = pc_res_clash["et"].astimezone(ist_tz).strftime('%I:%M %p')
+        who = f"{pc_res_clash['reserved_name']} ({pc_res_clash['roll_no']})" if pc_res_clash["reserved_name"] else (pc_res_clash["notes"] or "another session")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Workstation {target_pc['hostname']} is already reserved by {who} from {st_ist} to {et_ist}."
+        )
+
+    # 7. Check if PC has an active walk-in session right now
+    is_immediate = (start_time <= now + timedelta(minutes=10) and end_time > now)
+    if is_immediate:
+        active_sess = await fetch_one("""
+            SELECT s.id, s.user_id, u.name as current_user_name, u.roll_no as current_roll_no
+            FROM sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.pc_id = $1 AND s.status = 'ACTIVE'
+            LIMIT 1;
+        """, pc_id)
+
+        if active_sess:
+            if active_sess["user_id"] == student["id"]:
+                # The student themselves is already on this machine
+                pass
+            elif req.force_preempt:
+                # Administrator override: Preempt current walk-in session
+                await fetch_val(
+                    "SELECT fn_close_session($1, $2);",
+                    active_sess["id"],
+                    f"Preempted by Administrator for Dedicated Student Reservation ({student['roll_no']})"
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Workstation {target_pc['hostname']} is currently in use by {active_sess['current_user_name']} ({active_sess['current_roll_no']}). Enable 'Force Preempt' to reassign or select another machine."
+                )
+
+    # 8. Create Dedicated Reservation
+    init_status = "HELD" if is_immediate else "PENDING"
+    notes = f"Admin Dedicated: {req.purpose or 'Reserved by Lab Administrator'}"
+    if req.notes:
+        notes += f" | {req.notes.strip()}"
+
+    res_id = await fetch_val("""
+        INSERT INTO reservations (
+            student_id, pc_id, task_type, time_range, status,
+            grace_deadline, priority_score, allocation_basis, notes
+        ) VALUES (
+            $1, $2, 'Coursework', tstzrange($3, $4, '[)'), $5,
+            $4, 100, 'ADMIN_DEDICATED', $6
+        ) RETURNING id;
+    """, student["id"], pc_id, start_time, end_time, init_status, notes)
+
+    # 9. Update PC State if immediate
+    if is_immediate:
+        await execute("""
+            UPDATE pcs
+            SET state = 'HELD', updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND state != 'OCCUPIED' AND state != 'MAINTENANCE';
+        """, pc_id)
+
+    # 10. Audit log
+    admin_id = int(payload.get("sub", 1))
+    await execute("""
+        INSERT INTO audit_logs (event_type, user_id, pc_id, details)
+        VALUES ('ADMIN_DEDICATED_RESERVATION', $1, $2, $3::jsonb);
+    """, admin_id, pc_id, f'{{"reservation_id": {res_id}, "student_id": {student["id"]}, "student_roll_no": "{student["roll_no"]}", "force_preempt": {str(req.force_preempt).lower()}}}')
+
+    lab_info = await fetch_one("SELECT name FROM labs WHERE id = $1", target_pc["lab_id"])
+
+    return {
+        "status": "success",
+        "reservation_id": res_id,
+        "pc_id": pc_id,
+        "hostname": target_pc["hostname"],
+        "lab_name": lab_info["name"] if lab_info else "Campus Lab",
+        "student_name": student["name"],
+        "roll_no": student["roll_no"],
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat(),
+        "reservation_status": init_status,
+        "message": f"Workstation {target_pc['hostname']} dedicated to {student['name']} ({student['roll_no']}) until {end_time.strftime('%I:%M %p')}."
+    }
+
+
+@router.post("/reservations/{reservation_id}/extend")
+async def extend_dedicated_reservation(
+    reservation_id: int,
+    req: AdminExtendReservationRequest,
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    """
+    Extend an active or held dedicated reservation.
+    Validates clashes against upcoming practical labs, club events, and other bookings.
+    """
+    verify_admin(payload)
+    await reap_expired_allocations()
+
+    res = await fetch_one("""
+        SELECT r.id, r.pc_id, r.student_id, p.hostname, p.lab_id, l.name as lab_name,
+               u.name as student_name, u.roll_no,
+               lower(r.time_range) as start_time, upper(r.time_range) as end_time,
+               r.status, r.notes
+        FROM reservations r
+        JOIN pcs p ON p.id = r.pc_id
+        JOIN labs l ON l.id = p.lab_id
+        JOIN users u ON u.id = r.student_id
+        WHERE r.id = $1;
+    """, reservation_id)
+    if not res:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found.")
+
+    if res["status"] not in ("PENDING", "HELD", "ACTIVE"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Cannot extend {res['status']} reservation.")
+
+    cur_end = res["end_time"]
+    if cur_end.tzinfo is None:
+        cur_end = cur_end.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    base_time = max(cur_end, now)
+
+    if req.new_end_time:
+        new_end = req.new_end_time
+        if new_end.tzinfo is None:
+            new_end = new_end.replace(tzinfo=timezone.utc)
+    else:
+        add_mins = max(5, req.additional_minutes or 30)
+        new_end = base_time + timedelta(minutes=add_mins)
+
+    if new_end <= cur_end:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New end time must be later than current end time."
+        )
+
+    # Collision Check 1: Other reservations on this PC during extension window [cur_end, new_end)
+    res_clash = await fetch_one("""
+        SELECT r2.id, r2.notes, u2.name as clash_name, u2.roll_no as clash_roll,
+               lower(r2.time_range) as st
+        FROM reservations r2
+        LEFT JOIN users u2 ON u2.id = r2.student_id
+        WHERE r2.pc_id = $1
+          AND r2.id != $2
+          AND r2.status IN ('PENDING', 'HELD', 'ACTIVE')
+          AND r2.time_range && tstzrange($3, $4, '[)')
+        LIMIT 1;
+    """, res["pc_id"], reservation_id, cur_end, new_end)
+    if res_clash:
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        st_ist = res_clash["st"].astimezone(ist_tz).strftime('%I:%M %p')
+        who = f"{res_clash['clash_name']} ({res_clash['clash_roll']})" if res_clash["clash_name"] else (res_clash["notes"] or "another booking")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot extend: Workstation {res['hostname']} has an upcoming reservation for {who} starting at {st_ist}."
+        )
+
+    # Collision Check 2: Upcoming approved club events in that lab during extension window
+    club_clash = await fetch_one("""
+        SELECT ce.id, ce.title, c.name as club_name, lower(ce.time_range) as st
+        FROM club_events ce
+        JOIN clubs c ON c.id = ce.club_id
+        WHERE (ce.lab_id = $1 OR ce.secondary_lab_id = $1)
+          AND ce.status = 'APPROVED'
+          AND ce.time_range && tstzrange($2, $3, '[)')
+        LIMIT 1;
+    """, res["lab_id"], cur_end, new_end)
+    if club_clash:
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        st_ist = club_clash["st"].astimezone(ist_tz).strftime('%I:%M %p')
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot extend: Laboratory is scheduled for club event '{club_clash['club_name']} - {club_clash['title']}' starting at {st_ist}."
+        )
+
+    # Apply extension: update time_range and grace_deadline
+    await execute("""
+        UPDATE reservations
+        SET time_range = tstzrange(lower(time_range), $1, '[)'),
+            grace_deadline = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2;
+    """, new_end, reservation_id)
+
+    # Ensure PC state remains HELD if not OCCUPIED
+    await execute("""
+        UPDATE pcs
+        SET state = 'HELD', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1 AND state = 'AVAILABLE';
+    """, res["pc_id"])
+
+    remaining_minutes = max(0, int((new_end - now).total_seconds() / 60))
+
+    return {
+        "status": "success",
+        "reservation_id": reservation_id,
+        "hostname": res["hostname"],
+        "student_name": res["student_name"],
+        "roll_no": res["roll_no"],
+        "new_end_time": new_end.isoformat(),
+        "remaining_minutes": remaining_minutes,
+        "message": f"Reservation on {res['hostname']} extended until {new_end.strftime('%I:%M %p')} ({remaining_minutes} min remaining)."
+    }
+
+
+@router.post("/reservations/{reservation_id}/release")
+async def release_dedicated_reservation(
+    reservation_id: int,
+    payload: dict = Depends(get_current_user_token_payload)
+):
+    """
+    Release / cancel a dedicated reservation early, terminating any active session
+    and restoring the workstation to AVAILABLE walk-in kiosk mode.
+    """
+    verify_admin(payload)
+
+    res = await fetch_one("""
+        SELECT r.id, r.pc_id, r.student_id, p.hostname, r.status
+        FROM reservations r
+        JOIN pcs p ON p.id = r.pc_id
+        WHERE r.id = $1;
+    """, reservation_id)
+    if not res:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found.")
+
+    # 1. Close any active session on this reservation or PC
+    active_sess = await fetch_one("""
+        SELECT id FROM sessions
+        WHERE (reservation_id = $1 OR (pc_id = $2 AND user_id = $3)) AND status = 'ACTIVE'
+        LIMIT 1;
+    """, reservation_id, res["pc_id"], res["student_id"])
+
+    if active_sess:
+        await fetch_val("SELECT fn_close_session($1, $2);", active_sess["id"], "Released early by Administrator")
+
+    # 2. Mark reservation completed
+    await execute("""
+        UPDATE reservations
+        SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1;
+    """, reservation_id)
+
+    # 3. Restore PC state to AVAILABLE (if no other upcoming hold or maintenance)
+    now = datetime.now(timezone.utc)
+    other_hold = await fetch_one("""
+        SELECT id FROM reservations
+        WHERE pc_id = $1
+          AND status = 'HELD'
+          AND upper(time_range) > $2
+          AND lower(time_range) <= ($2 + INTERVAL '10 minutes')
+        LIMIT 1;
+    """, res["pc_id"], now)
+
+    if not other_hold:
+        await execute("""
+            UPDATE pcs
+            SET state = 'AVAILABLE', updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND state != 'MAINTENANCE';
+        """, res["pc_id"])
+
+    return {
+        "status": "success",
+        "reservation_id": reservation_id,
+        "hostname": res["hostname"],
+        "message": f"Workstation {res['hostname']} released and restored to AVAILABLE walk-in kiosk mode."
+    }
+
 
 
