@@ -345,6 +345,12 @@ body {
     padding-top: 0.75rem;
     border-top: 1px solid var(--neutral-800);
     text-align: center;
+    min-height: 4.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    contain: layout style;
 }
 
 .countdown-label {
@@ -354,6 +360,7 @@ body {
     letter-spacing: 0.05em;
     font-weight: 600;
     margin-bottom: 0.25rem;
+    line-height: 1.2;
 }
 
 /* Tabular countdown numerals eliminating jitter (AUD-03) */
@@ -367,6 +374,18 @@ body {
     font-feature-settings: "tnum" 1;
     letter-spacing: 0.04em;
     line-height: 1.1;
+    min-height: 3.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.countdown-timer.is-dedicated,
+.held-grace-timer.is-dedicated {
+    font-size: 1.65rem;
+    letter-spacing: 0.02em;
 }
 
 /* ==========================================================================

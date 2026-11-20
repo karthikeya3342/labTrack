@@ -8,7 +8,7 @@
 set -e
 
 CLIENT_HOST="${1:-COMP-PC-01}"
-SERVER_URL="${2:-http://172.16.72.243:8000}"
+SERVER_URL="${2:-http://172.16.72.174:8000}"
 CAPTIVE_PORTAL="${3:-https://10.10.10.2:8090/httpclient.html}"
 
 echo "=========================================================="
@@ -20,7 +20,17 @@ echo "=========================================================="
 
 # 1. Verify Connectivity to Lab Server
 echo "Testing LAN connectivity to Lab Server at ${SERVER_URL}/health ..."
-if ! curl -s --connect-timeout 4 "${SERVER_URL}/health" >/dev/null; then
+if command -v curl >/dev/null 2>&1; then
+    HTTP_CHECK="curl -s --connect-timeout 4"
+elif command -v wget >/dev/null 2>&1; then
+    HTTP_CHECK="wget -q --timeout=4 -O /dev/null"
+else
+    echo "Installing curl..."
+    DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y curl
+    HTTP_CHECK="curl -s --connect-timeout 4"
+fi
+
+if ! ${HTTP_CHECK} "${SERVER_URL}/health" >/dev/null 2>&1; then
     echo "ERROR: Cannot reach Lab Server at ${SERVER_URL}."
     echo "Please verify that the server is running and both PCs are on the same subnet."
     exit 1
@@ -31,14 +41,16 @@ echo "Connection to Lab Server verified!"
 echo "Checking Python 3 environment..."
 if ! command -v python3 >/dev/null 2>&1; then
     echo "Installing python3..."
-    apt-get update && apt-get install -y python3 python3-pip python3-psutil python3-requests
+    DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-psutil python3-requests curl
 fi
 
 # Ensure psutil and requests are installed
 python3 -c "import psutil, requests" 2>/dev/null || {
     echo "Installing required python packages (psutil, requests)..."
-    pip3 install psutil requests --break-system-packages 2>/dev/null || apt-get install -y python3-psutil python3-requests
+    DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y python3-psutil python3-requests curl || pip3 install psutil requests --break-system-packages 2>/dev/null
 }
+
+PYTHON_BIN="$(command -v python3 || echo /usr/bin/python3)"
 
 # 3. Create Installation Directory
 INSTALL_DIR="/opt/labtrack"
@@ -51,7 +63,16 @@ if [ -f "$(dirname "${BASH_SOURCE[0]}")/../agent/labtrack_agent.py" ]; then
     cp "$(dirname "${BASH_SOURCE[0]}")/../agent/labtrack_agent.py" "${INSTALL_DIR}/labtrack_agent.py"
 else
     echo "Downloading labtrack_agent.py from Lab Server..."
-    curl -s "${SERVER_URL}/agent/labtrack_agent.py" -o "${INSTALL_DIR}/labtrack_agent.py"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "${SERVER_URL}/agent/labtrack_agent.py" -o "${INSTALL_DIR}/labtrack_agent.py"
+    else
+        wget -qO "${INSTALL_DIR}/labtrack_agent.py" "${SERVER_URL}/agent/labtrack_agent.py"
+    fi
+fi
+
+if [ ! -s "${INSTALL_DIR}/labtrack_agent.py" ]; then
+    echo "ERROR: Failed to fetch a valid labtrack_agent.py from ${SERVER_URL}."
+    exit 1
 fi
 chmod +x "${INSTALL_DIR}/labtrack_agent.py"
 
@@ -75,7 +96,7 @@ Environment="LABTRACK_SERVER_URL=${SERVER_URL}"
 Environment="LABTRACK_HOSTNAME=${CLIENT_HOST}"
 Environment="CAPTIVE_PORTAL_URL=${CAPTIVE_PORTAL}"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/usr/bin/python3 ${INSTALL_DIR}/labtrack_agent.py
+ExecStart=${PYTHON_BIN} ${INSTALL_DIR}/labtrack_agent.py
 ExecStopPost=/usr/bin/curl -s -m 3 -X POST -H "Content-Type: application/json" -d '{"hostname":"${CLIENT_HOST}","reason":"Workstation shutdown / powered off"}' ${SERVER_URL}/api/agent/close
 Restart=always
 RestartSec=3s

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
+from backend.app.core.config import settings
 from backend.app.core.intelligent_scheduler import run_simulation_comparison, DynamicTaskPoolScheduler, TaskPoolItem
 from backend.app.core.security import get_current_user_token_payload
 from backend.app.core.database import fetch_all, fetch_one, execute, fetch_val
@@ -171,10 +172,10 @@ async def promote_next_taskpool_entry(pc_id: int, lab_id: int) -> Optional[Dict[
     """
     Triggered when a workstation session closes.
     Checks if any students are queued in the TaskPool for this lab.
-    Promotes the highest aged-priority candidate, holds the PC in 'HELD' state with 15-min grace.
+    Promotes the highest aged-priority candidate, holds the PC in 'HELD' state with grace period.
     """
     now = datetime.now(timezone.utc)
-    grace_deadline = now + timedelta(minutes=15)
+    grace_deadline = now + timedelta(minutes=settings.RESERVATION_GRACE_MINUTES)
     end_time = now + timedelta(hours=2)
 
     # Find highest priority queued entry matching this lab

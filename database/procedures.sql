@@ -40,7 +40,7 @@ BEGIN
         RAISE EXCEPTION 'PC % is currently in maintenance', p_pc_id;
     END IF;
 
-    v_grace := p_start + INTERVAL '15 minutes';
+    v_grace := p_start + INTERVAL '20 minutes';
     v_time_range := tstzrange(p_start, p_end, '[)');
 
     -- Insert reservation (GiST constraint automatically prevents overlaps)
@@ -205,7 +205,7 @@ BEGIN
             INSERT INTO reservations (
                 student_id, pc_id, task_type, time_range, status, grace_deadline, notes
             ) VALUES (
-                v_user_id, v_pc_id, 'Practice', tstzrange(v_now, v_walkin_end, '[)'), 'ACTIVE', v_now + INTERVAL '15 minutes', 'Walk-in Session'
+                v_user_id, v_pc_id, 'Practice', tstzrange(v_now, v_walkin_end, '[)'), 'ACTIVE', v_now + INTERVAL '20 minutes', 'Walk-in Session'
             ) RETURNING id INTO v_res_id;
         END IF;
     END IF;

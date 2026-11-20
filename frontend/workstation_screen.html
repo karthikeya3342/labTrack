@@ -108,7 +108,7 @@
 
                     <div class="countdown-box">
                         <div class="countdown-label" id="heldCountdownLabel">Hold Grace Period Remaining</div>
-                        <div class="countdown-timer tabular-nums" id="graceCountdown" aria-live="off">14:59</div>
+                        <div class="countdown-timer tabular-nums" id="graceCountdown" aria-live="off">20:00</div>
                     </div>
 
                     <div id="heldAdminNotice" style="display: none; font-size: 0.76rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 6px; padding: 0.45rem 0.65rem; margin-top: 0.65rem; line-height: 1.4;">
@@ -486,7 +486,14 @@
                 }
 
                 remainingGraceSeconds = data.remaining_grace_seconds || 0;
-                document.getElementById('graceCountdown').innerText = data.remaining_time_display || formatRemainingCountdown(remainingGraceSeconds);
+                const cdElem = document.getElementById('graceCountdown');
+                if (isDedicated) {
+                    cdElem.classList.add('is-dedicated');
+                    cdElem.innerText = data.remaining_time_display || formatRemainingCountdown(remainingGraceSeconds);
+                } else {
+                    cdElem.classList.remove('is-dedicated');
+                    cdElem.innerText = formatRemainingCountdown(remainingGraceSeconds);
+                }
 
                 document.getElementById('loginRollLabel').innerText = isDedicated ? "Designated Student Roll Number" : "Reserved Student Roll Number";
                 const btn = document.getElementById('loginSubmitBtn');
@@ -528,7 +535,7 @@
         }
 
         function formatRemainingCountdown(seconds) {
-            if (seconds <= 0) return "Expired";
+            if (seconds <= 0) return "00:00";
             const days = Math.floor(seconds / 86400);
             const hours = Math.floor((seconds % 86400) / 3600);
             const mins = Math.floor((seconds % 3600) / 60);
@@ -545,7 +552,7 @@
                 return `1 day ${hours}h remaining`;
             }
             if (hours > 0) {
-                return `${hours}h ${mins}m ${secs}s`;
+                return `${hours}h ${String(mins).padStart(2, '0')}m ${String(secs).padStart(2, '0')}s`;
             }
             return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         }

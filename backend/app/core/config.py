@@ -24,7 +24,7 @@ class Settings(BaseModel):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 
     # Grace Period & Policies
-    RESERVATION_GRACE_MINUTES: int = 15
+    RESERVATION_GRACE_MINUTES: int = int(os.getenv("RESERVATION_GRACE_MINUTES", "20"))
     WALKIN_MAX_HOURS: int = 2
     GPU_MIN_RUN_HOURS_FOR_PREEMPTION: float = 1.0
     

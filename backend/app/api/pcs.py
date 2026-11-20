@@ -288,18 +288,29 @@ async def get_pc_lock_state(hostname: str):
                 if st and st.tzinfo is None:
                     st = st.replace(tzinfo=timezone.utc)
 
-                if et:
-                    rem_secs = max(0, int((et - now).total_seconds()))
-                elif res["grace_deadline"]:
-                    gd = res["grace_deadline"]
-                    if gd.tzinfo is None:
-                        gd = gd.replace(tzinfo=timezone.utc)
-                    rem_secs = max(0, int((gd - now).total_seconds()))
+                if is_admin:
+                    if et:
+                        rem_secs = max(0, int((et - now).total_seconds()))
+                    else:
+                        rem_secs = 0
+                    resp.remaining_grace_seconds = rem_secs
+                    resp.remaining_time_display = format_remaining_display(rem_secs)
                 else:
-                    rem_secs = 0
+                    # Standard student booking: countdown represents grace deadline before NO_SHOW
+                    if res["grace_deadline"]:
+                        gd = res["grace_deadline"]
+                        if gd.tzinfo is None:
+                            gd = gd.replace(tzinfo=timezone.utc)
+                        rem_secs = max(0, int((gd - now).total_seconds()))
+                    elif et:
+                        rem_secs = max(0, int((et - now).total_seconds()))
+                    else:
+                        rem_secs = 0
+                    resp.remaining_grace_seconds = rem_secs
+                    mins = rem_secs // 60
+                    secs = rem_secs % 60
+                    resp.remaining_time_display = f"{mins:02d}:{secs:02d}"
 
-                resp.remaining_grace_seconds = rem_secs
-                resp.remaining_time_display = format_remaining_display(rem_secs)
                 if st and et:
                     resp.time_window = format_time_window_display(st, et)
 
